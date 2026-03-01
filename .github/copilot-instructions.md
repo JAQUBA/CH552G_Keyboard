@@ -346,12 +346,17 @@ Aplikacja desktopowa C++17 korzystająca z **JQB_WindowsLib** (`lib_deps` w `pla
 
 Buttony na zakładce "Klawisze" używają `SetWindowSubclass()` z custom `KeyCaptureProc`:
 1. Kliknięcie → przycisk pokazuje "..." i czeka na kombinację klawiszy
-2. `WM_KEYDOWN` / `WM_SYSKEYDOWN` → `vkToFwKey()` konwertuje VK na kod firmware, `getAsyncModBits()` odczytuje aktywne modyfikatory jako bitmaskę
-3. Rozróżnia lewy/prawy Shift/Ctrl/Alt przez `GetAsyncKeyState()`, `fwKeyToModBit()` usuwa bit samego modyfikatora jeśli to on jest naciskanym klawiszem
-4. Wyświetla kombinację w formacie "LCtrl+LAlt+F6" przez `comboToName(mod, code)`
-5. Focus loss → anuluje przechwytywanie
+2. `WM_KEYDOWN` modyfikatora (Ctrl/Shift/Alt/Win) → podgląd "LCtrl+LAlt+..." — capture **czeka dalej**
+3. `WM_KEYDOWN` nie-modyfikatora → `getAsyncModBits()` + `vkToFwKey()` → **zatwierdza combo** (np. "LCtrl+F6")
+4. `WM_KEYUP` — jeśli wszystkie klawisze puszczone i był sam modyfikator → **zatwierdza modyfikator** jako klawisz (np. "LShift")
+5. Rozróżnia lewy/prawy Shift/Ctrl/Alt przez `MapVirtualKeyW()` / extended bit
+6. `fwKeyToModBit()` konwertuje kod modyfikatora na bit MOD_BIT_*
+7. Focus loss → anuluje przechwytywanie
 
-Struktura `KeyCapture` przechowuje `uint8_t mod` (bitmask) + `uint8_t code` (key code).
+Struktura `KeyCapture` przechowuje:
+- `uint8_t mod` (bitmask) + `uint8_t code` (key code) — zatwierdzony wynik
+- `uint8_t pendingMod` — podgląd modyfikatorów w trakcie capture
+- `uint8_t lastModKey` — ostatni naciśnięty modyfikator (do zatwierdzenia standalone)
 
 ### HID — połączenie z klawiaturą
 
