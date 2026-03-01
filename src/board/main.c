@@ -114,12 +114,14 @@ static void encoder_pulse(uint8_t mod, uint8_t key) {
 /*  Enter USB bootloader                                         */
 /* ============================================================ */
 void enterBootloader(void) {
+    EA = 0;                    /* disable all interrupts first */
     USB_INT_EN = 0;            /* disable USB interrupts       */
-    USB_CTRL   = 0;            /* detach USB — host sees disconnect */
-    EA = 0;                    /* disable all interrupts       */
-    TMOD = 0;                  /* stop timers                  */
-    delayMicroseconds(50000);  /* ~50 ms — let host notice     */
-    delayMicroseconds(50000);  /* ~50 ms more                  */
+    USB_CTRL   = 0;            /* disable USB controller       */
+    UDEV_CTRL  = 0;            /* release D+ pull-up — host sees disconnect */
+    delayMicroseconds(50000);  /* busy-wait ~50 ms             */
+    delayMicroseconds(50000);  /* ~100 ms total                */
+    delayMicroseconds(50000);  /* ~150 ms                      */
+    delayMicroseconds(50000);  /* ~200 ms — enough for host    */
     __asm__("ljmp 0x3800\n"); /* jump to ROM bootloader       */
     while (1);                 /* should never reach here      */
 }

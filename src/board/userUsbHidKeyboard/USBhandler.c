@@ -98,12 +98,15 @@ void USB_EP0_SETUP() {
             __data uint8_t rtype = UsbSetupBuf->wValueH;
             __data uint8_t rid   = UsbSetupBuf->wValueL;
             if (rtype == 3) { /* Feature report */
+              /* HID spec: Report ID is first byte in DATA stage */
               if (rid == REPORT_ID_CONFIG1) {
-                config_pack_report2(Ep0Buffer);
-                len = CONFIG_REPORT_SIZE;
+                Ep0Buffer[0] = REPORT_ID_CONFIG1;
+                config_pack_report2(Ep0Buffer + 1);
+                len = 1 + CONFIG_REPORT_SIZE;
               } else if (rid == REPORT_ID_CONFIG2) {
-                config_pack_report3(Ep0Buffer);
-                len = CONFIG_REPORT_SIZE;
+                Ep0Buffer[0] = REPORT_ID_CONFIG2;
+                config_pack_report3(Ep0Buffer + 1);
+                len = 1 + CONFIG_REPORT_SIZE;
               } else {
                 len = 0xFF;
               }
@@ -353,17 +356,16 @@ void USB_EP0_IN() {
 void USB_EP0_OUT() {
   if (SetupReq == HID_SET_REPORT) {
     if (setReportIface == 1 && setReportType == 3) {
-      /* Vendor Feature Report — Windows strips Report ID from DATA stage;
-       * Ep0Buffer[0] is the first data byte, not the Report ID.
-       * (Report ID was already extracted into wValue by the HID minidriver.) */
+      /* HID spec: Report ID is first byte of DATA stage (Ep0Buffer[0]).
+       * Actual report data starts at Ep0Buffer[1]. */
       if (setReportId == REPORT_ID_CONFIG1) {
-        config_unpack_report2(Ep0Buffer);
+        config_unpack_report2(Ep0Buffer + 1);
         config_save();
       } else if (setReportId == REPORT_ID_CONFIG2) {
-        config_unpack_report3(Ep0Buffer);
+        config_unpack_report3(Ep0Buffer + 1);
         config_save();
       } else if (setReportId == REPORT_ID_COMMAND) {
-        if (Ep0Buffer[0] == CMD_BOOTLOADER) {
+        if (Ep0Buffer[1] == CMD_BOOTLOADER) {
           enterBootloader();
         }
       }
