@@ -381,15 +381,80 @@ static Button* btnWrite;
 static Button* btnReset;
 static Button* btnBootloader;
 
+/* Polling state for auto-send on LED change */
+static int prevLedModeIdx  = -1;
+static int prevBrtIdx      = -1;
+static int prevColorIdx    = -1;
+static bool prevTog1       = false;
+static bool prevTog2       = false;
+static bool prevTog3       = false;
+static bool ignoreSelChange = false; /* suppress during readFromDevice */
+
+/* ================================================================== */
+/*  Auto-connect helper                                                */
+/* ================================================================== */
+
+static bool tryConnect() {
+    if (hid.isOpen()) return true;
+    if (hid.findAndOpen()) {
+        lblStatus->setText(L"Status: Polaczony");
+        SetWindowTextA(btnConnect->getHandle(), "Rozlacz");
+        return true;
+    }
+    lblStatus->setText(L"Nie znaleziono klawiatury!");
+    return false;
+}
+
+/* ================================================================== */
+/*  Send only LED config (Report 3) — used for live preview            */
+/* ================================================================== */
+
+static void sendLedConfig() {
+    if (!hid.isOpen()) return;
+
+    int idx;
+    uint8_t buf3[CONFIG_REPORT_SIZE];
+    memset(buf3, 0, sizeof(buf3));
+
+    buf3[0] = kcCcwKey ? kcCcwKey->code : DEFAULT_CCW_KEY;
+
+    idx = getSelIndex(selBrightness);
+    if (idx >= 0 && idx <= 25) {
+        buf3[1] = (uint8_t)(idx * 10);
+        if (idx == 25) buf3[1] = 255;
+    } else {
+        buf3[1] = DEFAULT_LED_BRT;
+    }
+
+    idx = getSelIndex(selLedMode);
+    buf3[2] = (idx >= 0 && idx < LED_MODE_COUNT)
+              ? ledModeTable[idx].code : DEFAULT_LED_MODE;
+
+    idx = getSelIndex(selLedColor);
+    if (idx >= 0 && idx < COLOR_COUNT) {
+        buf3[3] = colorTable[idx].r;
+        buf3[4] = colorTable[idx].g;
+        buf3[5] = colorTable[idx].b;
+    } else {
+        buf3[3] = DEFAULT_LED_R;
+        buf3[4] = DEFAULT_LED_G;
+        buf3[5] = DEFAULT_LED_B;
+    }
+
+    buf3[6] = 0;
+    if (isChecked(chkToggle1)) buf3[6] |= 0x01;
+    if (isChecked(chkToggle2)) buf3[6] |= 0x02;
+    if (isChecked(chkToggle3)) buf3[6] |= 0x04;
+
+    hid.setFeatureReport(REPORT_ID_CONFIG2, buf3, CONFIG_REPORT_SIZE);
+}
+
 /* ================================================================== */
 /*  Read / write helpers                                               */
 /* ================================================================== */
 
 static void readFromDevice() {
-    if (!hid.isOpen()) {
-        lblStatus->setText(L"Najpierw polacz!");
-        return;
-    }
+    if (!tryConnect()) return;
 
     uint8_t buf2[CONFIG_REPORT_SIZE];
     uint8_t buf3[CONFIG_REPORT_SIZE];
@@ -429,14 +494,19 @@ static void readFromDevice() {
     SendMessageW(chkToggle3, BM_SETCHECK,
                  (buf3[6] & 0x04) ? BST_CHECKED : BST_UNCHECKED, 0);
 
+    /* Sync polling state so loop() doesn't immediately re-send */
+    prevLedModeIdx = getSelIndex(selLedMode);
+    prevBrtIdx     = getSelIndex(selBrightness);
+    prevColorIdx   = getSelIndex(selLedColor);
+    prevTog1       = isChecked(chkToggle1);
+    prevTog2       = isChecked(chkToggle2);
+    prevTog3       = isChecked(chkToggle3);
+
     lblStatus->setText(L"Odczytano z urzadzenia");
 }
 
 static void writeToDevice() {
-    if (!hid.isOpen()) {
-        lblStatus->setText(L"Najpierw polacz!");
-        return;
-    }
+    if (!tryConnect()) return;
 
     int idx;
     uint8_t buf2[CONFIG_REPORT_SIZE];
@@ -493,6 +563,14 @@ static void writeToDevice() {
         return;
     }
     lblStatus->setText(L"Zapisano do urzadzenia (EEPROM)");
+
+    /* Sync polling state */
+    prevLedModeIdx = getSelIndex(selLedMode);
+    prevBrtIdx     = getSelIndex(selBrightness);
+    prevColorIdx   = getSelIndex(selLedColor);
+    prevTog1       = isChecked(chkToggle1);
+    prevTog2       = isChecked(chkToggle2);
+    prevTog3       = isChecked(chkToggle3);
 }
 
 static void resetDefaults() {
@@ -707,10 +785,7 @@ void setup() {
 
     btnBootloader = new Button(370, by, 120, 30, "Bootloader",
         [](Button*) {
-            if (!hid.isOpen()) {
-                lblStatus->setText(L"Najpierw polacz!");
-                return;
-            }
+            if (!tryConnect()) return;
             uint8_t cmdBuf[CMD_REPORT_SIZE];
             cmdBuf[0] = CMD_BOOTLOADER;
             if (hid.setFeatureReport(REPORT_ID_COMMAND, cmdBuf,
@@ -726,8 +801,36 @@ void setup() {
 
     /* Set defaults in UI */
     resetDefaults();
+
+    /* Init polling state */
+    prevLedModeIdx = getSelIndex(selLedMode);
+    prevBrtIdx     = getSelIndex(selBrightness);
+    prevColorIdx   = getSelIndex(selLedColor);
+    prevTog1       = false;
+    prevTog2       = false;
+    prevTog3       = false;
 }
 
 void loop() {
-    /* Nothing to poll — UI is event-driven */
+    /* Auto-send LED config when any LED-related control changes */
+    if (hid.isOpen() && selLedMode && selBrightness && selLedColor) {
+        int curMode  = getSelIndex(selLedMode);
+        int curBrt   = getSelIndex(selBrightness);
+        int curColor = getSelIndex(selLedColor);
+        bool curTog1 = isChecked(chkToggle1);
+        bool curTog2 = isChecked(chkToggle2);
+        bool curTog3 = isChecked(chkToggle3);
+
+        if (curMode != prevLedModeIdx || curBrt != prevBrtIdx ||
+            curColor != prevColorIdx || curTog1 != prevTog1 ||
+            curTog2 != prevTog2 || curTog3 != prevTog3) {
+            prevLedModeIdx = curMode;
+            prevBrtIdx     = curBrt;
+            prevColorIdx   = curColor;
+            prevTog1       = curTog1;
+            prevTog2       = curTog2;
+            prevTog3       = curTog3;
+            sendLedConfig();
+        }
+    }
 }

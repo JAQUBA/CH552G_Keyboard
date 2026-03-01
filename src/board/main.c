@@ -66,9 +66,9 @@ void hsv_to_rgb(uint8_t h, uint8_t s, uint8_t v,
     region    = h / 43;
     remainder = (h - (region * 43)) * 6;
 
-    p = (v * (255 - s)) >> 8;
-    q = (v * (255 - ((s * remainder) >> 8))) >> 8;
-    t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
+    p = ((uint16_t)v * (255 - s)) >> 8;
+    q = ((uint16_t)v * (255 - (((uint16_t)s * remainder) >> 8))) >> 8;
+    t = ((uint16_t)v * (255 - (((uint16_t)s * (255 - remainder)) >> 8))) >> 8;
 
     switch (region) {
         case 0:  *r = v; *g = t; *b = p; break;
