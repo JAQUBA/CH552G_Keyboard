@@ -19,6 +19,10 @@ typedef struct {
     uint8_t enc_ccw_key;
     uint8_t led_brightness;
     uint8_t led_mode;
+    uint8_t led_r;
+    uint8_t led_g;
+    uint8_t led_b;
+    uint8_t led_toggle;  /* bitmask: bit0=key1, bit1=key2, bit2=key3 */
 } KeyboardConfig;
 
 extern __xdata KeyboardConfig g_config;

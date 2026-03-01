@@ -353,7 +353,9 @@ void USB_EP0_IN() {
 void USB_EP0_OUT() {
   if (SetupReq == HID_SET_REPORT) {
     if (setReportIface == 1 && setReportType == 3) {
-      /* Vendor Feature Report → update config & save to EEPROM */
+      /* Vendor Feature Report — Windows strips Report ID from DATA stage;
+       * Ep0Buffer[0] is the first data byte, not the Report ID.
+       * (Report ID was already extracted into wValue by the HID minidriver.) */
       if (setReportId == REPORT_ID_CONFIG1) {
         config_unpack_report2(Ep0Buffer);
         config_save();

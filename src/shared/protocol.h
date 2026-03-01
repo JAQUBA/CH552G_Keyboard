@@ -46,7 +46,10 @@
  *    [0]  Encoder CCW key
  *    [1]  LED brightness  (0-255)
  *    [2]  LED mode         (0=rainbow, 1=static, 2=breathe)
- *    [3..6]  reserved (0)
+ *    [3]  LED static Red   (0-255)
+ *    [4]  LED static Green (0-255)
+ *    [5]  LED static Blue  (0-255)
+ *    [6]  LED toggle mask  (bit0=key1, bit1=key2, bit2=key3)
  */
 
 /* ------------------------------------------------------------------ */
@@ -65,7 +68,11 @@
 #define EEPROM_ADDR_CCW_KEY   8
 #define EEPROM_ADDR_LED_BRT   9
 #define EEPROM_ADDR_LED_MODE  10
-#define EEPROM_CONFIG_SIZE    11
+#define EEPROM_ADDR_LED_R     11
+#define EEPROM_ADDR_LED_G     12
+#define EEPROM_ADDR_LED_B     13
+#define EEPROM_ADDR_LED_TOGGLE 14
+#define EEPROM_CONFIG_SIZE    15
 
 /* ------------------------------------------------------------------ */
 /*  LED modes                                                          */
@@ -87,6 +94,10 @@
 #define DEFAULT_CCW_KEY   0xD9  /* KEY_DOWN_ARROW  */
 #define DEFAULT_LED_BRT   40
 #define DEFAULT_LED_MODE  LED_MODE_RAINBOW
+#define DEFAULT_LED_R     255
+#define DEFAULT_LED_G     255
+#define DEFAULT_LED_B     255
+#define DEFAULT_LED_TOGGLE 0x00  /* no toggle by default */
 
 /* ------------------------------------------------------------------ */
 /*  Key code constants  (mirrors USBHIDKeyboard.h)                     */

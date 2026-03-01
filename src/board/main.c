@@ -17,6 +17,7 @@
 #include <Arduino.h>
 #include "userUsbHidKeyboard/USBHIDKeyboard.h"
 #include "config.h"
+#include "protocol.h"
 #include <WS2812.h>
 
 /* ============================================================ */
@@ -39,12 +40,16 @@
 /* ============================================================ */
 __xdata uint8_t led_data[NUM_LEDS * 3];
 static uint8_t hue_offset   = 0;
+static uint8_t breathe_val   = 0;
+static  int8_t breathe_dir   = 1;
+static uint8_t led_frame_cnt = 0;   /* throttle LED animation speed */
 
 static uint8_t key1_prev    = 0;
 static uint8_t key2_prev    = 0;
 static uint8_t key3_prev    = 0;
 static uint8_t enc_btn_prev = 0;
 static uint8_t enc_a_prev   = 1;
+static uint8_t led_toggle_state = 0; /* per-LED on/off state for toggle mode */
 
 /* ============================================================ */
 /*  HSV → RGB                                                    */
@@ -78,12 +83,19 @@ void hsv_to_rgb(uint8_t h, uint8_t s, uint8_t v,
 /* ============================================================ */
 /*  Button helper                                                */
 /* ============================================================ */
-static void handle_button(uint8_t pin, uint8_t key, uint8_t *prev) {
+static void handle_button(uint8_t pin, uint8_t key, uint8_t *prev, uint8_t led_idx) {
     uint8_t pressed = !digitalRead(pin);
     if (pressed != *prev) {
         *prev = pressed;
-        if (pressed) Keyboard_press(key);
-        else         Keyboard_release(key);
+        if (pressed) {
+            Keyboard_press(key);
+            /* If this key has LED toggle enabled, flip the LED state */
+            if (g_config.led_toggle & (1 << led_idx)) {
+                led_toggle_state ^= (1 << led_idx);
+            }
+        } else {
+            Keyboard_release(key);
+        }
     }
 }
 
@@ -108,7 +120,7 @@ void enterBootloader(void) {
     TMOD = 0;                  /* stop timers                  */
     delayMicroseconds(50000);  /* ~50 ms — let host notice     */
     delayMicroseconds(50000);  /* ~50 ms more                  */
-    __asm__("ljmp #0x3800");   /* jump to ROM bootloader       */
+    __asm__("ljmp 0x3800\n"); /* jump to ROM bootloader       */
     while (1);                 /* should never reach here      */
 }
 
@@ -144,10 +156,10 @@ void loop() {
     uint8_t i, r, g, b;
 
     /* --- Buttons (use runtime config) --- */
-    handle_button(KEY1_PIN,    g_config.key1_code,    &key1_prev);
-    handle_button(KEY2_PIN,    g_config.key2_code,    &key2_prev);
-    handle_button(KEY3_PIN,    g_config.key3_code,    &key3_prev);
-    handle_button(ENC_BTN_PIN, g_config.enc_btn_code, &enc_btn_prev);
+    handle_button(KEY1_PIN,    g_config.key1_code,    &key1_prev,    0);
+    handle_button(KEY2_PIN,    g_config.key2_code,    &key2_prev,    1);
+    handle_button(KEY3_PIN,    g_config.key3_code,    &key3_prev,    2);
+    handle_button(ENC_BTN_PIN, g_config.enc_btn_code, &enc_btn_prev, 3);
 
     /* --- Rotary encoder --- */
     {
@@ -166,23 +178,63 @@ void loop() {
     }
 
     /* --- NeoPixel --- */
-    if (g_config.led_mode == 0) {
-        /* Rainbow */
+    led_frame_cnt++;
+
+    if (g_config.led_mode == LED_MODE_RAINBOW) {
+        /* Rainbow — rotating hue across LEDs */
         for (i = 0; i < NUM_LEDS; i++) {
             uint8_t hue = hue_offset + (i * 85);
             hsv_to_rgb(hue, 255, g_config.led_brightness, &r, &g, &b);
             set_pixel_for_GRB_LED(led_data, i, r, g, b);
         }
-        hue_offset += 2;
-    } else {
-        /* Static colour — simple white at configured brightness */
+        if (led_frame_cnt >= 6) {  /* ~30 ms per step */
+            led_frame_cnt = 0;
+            hue_offset++;
+        }
+    } else if (g_config.led_mode == LED_MODE_STATIC) {
+        /* Static colour from config (R, G, B scaled by brightness) */
         for (i = 0; i < NUM_LEDS; i++) {
-            set_pixel_for_GRB_LED(led_data, i,
-                                  g_config.led_brightness,
-                                  g_config.led_brightness,
-                                  g_config.led_brightness);
+            r = ((uint16_t)g_config.led_r * g_config.led_brightness) >> 8;
+            g = ((uint16_t)g_config.led_g * g_config.led_brightness) >> 8;
+            b = ((uint16_t)g_config.led_b * g_config.led_brightness) >> 8;
+            set_pixel_for_GRB_LED(led_data, i, r, g, b);
+        }
+    } else if (g_config.led_mode == LED_MODE_BREATHE) {
+        /* Breathe — pulsing brightness with configured colour */
+        for (i = 0; i < NUM_LEDS; i++) {
+            r = ((uint16_t)g_config.led_r * breathe_val) >> 8;
+            g = ((uint16_t)g_config.led_g * breathe_val) >> 8;
+            b = ((uint16_t)g_config.led_b * breathe_val) >> 8;
+            set_pixel_for_GRB_LED(led_data, i, r, g, b);
+        }
+        if (led_frame_cnt >= 4) {  /* ~20 ms per step */
+            int16_t nv;
+            led_frame_cnt = 0;
+            nv = (int16_t)breathe_val + breathe_dir * 2;
+            if (nv >= (int16_t)g_config.led_brightness) {
+                breathe_val = g_config.led_brightness;
+                breathe_dir = -1;
+            } else if (nv <= 0) {
+                breathe_val = 0;
+                breathe_dir = 1;
+            } else {
+                breathe_val = (uint8_t)nv;
+            }
+        }
+    } else {
+        /* Unknown mode — fallback to rainbow */
+        g_config.led_mode = LED_MODE_RAINBOW;
+    }
+
+    /* Apply per-LED toggle: if a key has toggle enabled and its LED
+       is currently "off", blank that pixel. */
+    for (i = 0; i < NUM_LEDS; i++) {
+        if ((g_config.led_toggle & (1 << i)) &&
+            !(led_toggle_state & (1 << i))) {
+            set_pixel_for_GRB_LED(led_data, i, 0, 0, 0);
         }
     }
+
     neopixel_show_P3_4(led_data, NUM_LEDS * 3);
 
     delay(SCAN_DELAY_MS);

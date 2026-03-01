@@ -30,6 +30,14 @@ void config_load(void) {
     g_config.enc_ccw_key    = eeprom_read_byte(EEPROM_ADDR_CCW_KEY);
     g_config.led_brightness = eeprom_read_byte(EEPROM_ADDR_LED_BRT);
     g_config.led_mode       = eeprom_read_byte(EEPROM_ADDR_LED_MODE);
+    g_config.led_r          = eeprom_read_byte(EEPROM_ADDR_LED_R);
+    g_config.led_g          = eeprom_read_byte(EEPROM_ADDR_LED_G);
+    g_config.led_b          = eeprom_read_byte(EEPROM_ADDR_LED_B);
+    g_config.led_toggle     = eeprom_read_byte(EEPROM_ADDR_LED_TOGGLE);
+
+    /* Validate led_mode — default to rainbow for unknown values */
+    if (g_config.led_mode > LED_MODE_BREATHE)
+        g_config.led_mode = LED_MODE_RAINBOW;
 }
 
 /* ---- Save to DataFlash ---- */
@@ -44,6 +52,10 @@ void config_save(void) {
     eeprom_write_byte(EEPROM_ADDR_CCW_KEY,  g_config.enc_ccw_key);
     eeprom_write_byte(EEPROM_ADDR_LED_BRT,  g_config.led_brightness);
     eeprom_write_byte(EEPROM_ADDR_LED_MODE, g_config.led_mode);
+    eeprom_write_byte(EEPROM_ADDR_LED_R,    g_config.led_r);
+    eeprom_write_byte(EEPROM_ADDR_LED_G,    g_config.led_g);
+    eeprom_write_byte(EEPROM_ADDR_LED_B,    g_config.led_b);
+    eeprom_write_byte(EEPROM_ADDR_LED_TOGGLE, g_config.led_toggle);
     eeprom_write_byte(EEPROM_ADDR_MAGIC,    EEPROM_MAGIC);
 }
 
@@ -59,6 +71,10 @@ void config_reset(void) {
     g_config.enc_ccw_key    = DEFAULT_CCW_KEY;
     g_config.led_brightness = DEFAULT_LED_BRT;
     g_config.led_mode       = DEFAULT_LED_MODE;
+    g_config.led_r          = DEFAULT_LED_R;
+    g_config.led_g          = DEFAULT_LED_G;
+    g_config.led_b          = DEFAULT_LED_B;
+    g_config.led_toggle     = DEFAULT_LED_TOGGLE;
     config_save();
 }
 
@@ -88,14 +104,21 @@ void config_pack_report3(uint8_t *buf) {
     buf[0] = g_config.enc_ccw_key;
     buf[1] = g_config.led_brightness;
     buf[2] = g_config.led_mode;
-    buf[3] = 0;
-    buf[4] = 0;
-    buf[5] = 0;
-    buf[6] = 0;
+    buf[3] = g_config.led_r;
+    buf[4] = g_config.led_g;
+    buf[5] = g_config.led_b;
+    buf[6] = g_config.led_toggle;
 }
 
 void config_unpack_report3(const uint8_t *buf) {
     g_config.enc_ccw_key    = buf[0];
     g_config.led_brightness = buf[1];
     g_config.led_mode       = buf[2];
+    g_config.led_r          = buf[3];
+    g_config.led_g          = buf[4];
+    g_config.led_b          = buf[5];
+    g_config.led_toggle     = buf[6];
+    /* Validate led_mode */
+    if (g_config.led_mode > LED_MODE_BREATHE)
+        g_config.led_mode = LED_MODE_RAINBOW;
 }
