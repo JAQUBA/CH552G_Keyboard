@@ -1,103 +1,194 @@
 # CH552G Keyboard
 
-Firmware i aplikacja konfiguracyjna dla **3-klawiszowej klawiatury USB HID** z enkoderem obrotowym i podświetleniem NeoPixel, opartej na mikrokontrolerze **WCH CH552G**.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![PlatformIO](https://img.shields.io/badge/Built%20with-PlatformIO-orange)](https://platformio.org/)
+[![CH552G](https://img.shields.io/badge/MCU-WCH%20CH552G-green)](https://www.wch-ic.com/products/CH552.html)
 
-## Funkcje
+Custom open-source firmware and Windows configurator for a **3-key USB HID macro keyboard** with rotary encoder and NeoPixel RGB backlighting, based on the **WCH CH552G** microcontroller.
 
-- **3 programowalne klawisze** — dowolny klawisz lub kombinacja (np. Ctrl+Alt+F6)
-- **Enkoder obrotowy** — programowalny przycisk + obrót CW/CCW z modyfikatorami
-- **Podświetlenie NeoPixel** (3× WS2812) — tryby: tęcza, kolor statyczny, oddychanie
-- **LED toggle per-key** — każdy klawisz może przełączać swoją diodę
-- **Konfiguracja przez USB** — aplikacja Windows komunikuje się przez HID Feature Reports
-- **EEPROM** — ustawienia zapisywane w DataFlash, przeżywają restart
+<!-- Add your own photos to docs/images/ and uncomment: -->
+<!-- <p align="center">
+  <img src="docs/images/keyboard_front.jpg" width="500" alt="CH552G Keyboard" />
+</p> -->
 
-## Hardware
+## Where to Buy
 
-| Parametr | Wartość |
+This firmware targets a cheap 3-key macro keyboard widely available on AliExpress (~$5):
+
+**[RGB 3-Key Macro Mechanical Keyboard with Knob — AliExpress](https://www.aliexpress.com/item/1005006308067425.html)**
+
+The keyboard features:
+- 3 hot-swappable mechanical switches (Cherry MX compatible)
+- Rotary encoder with push button
+- 3 × WS2812 RGB LEDs under each key
+- USB Type-C connector
+- WCH CH552G MCU (MCS51 / 8051 core)
+
+> **Note:** The stock firmware has limited customization. This project replaces it with a fully open-source solution with a dedicated Windows configuration tool.
+
+## Features
+
+- **3 fully programmable keys** — any key or combo (e.g. Ctrl+Alt+F6)
+- **Rotary encoder** — programmable button + CW/CCW rotation with modifier support
+- **NeoPixel RGB backlighting** (3 × WS2812) — Rainbow, Static color, and Breathe modes
+- **Per-key LED toggle** — each key can toggle its LED on/off when pressed
+- **USB configuration** — Windows app communicates via HID Feature Reports (no special drivers needed)
+- **EEPROM storage** — settings persist across power cycles
+- **Remote bootloader** — enter firmware update mode from the configurator app
+- **Composite USB HID** — appears as standard keyboard + vendor config interface
+
+## Hardware Specifications
+
+| Parameter | Value |
 |---|---|
 | MCU | WCH CH552G (MCS51 / 8051, 24 MHz) |
 | Flash | 14 KB (16 KB − 2 KB bootloader) |
-| XRAM | 876 B |
+| XRAM | 876 B (1 KB − 148 B USB endpoints) |
 | DataFlash (EEPROM) | 128 B |
 | USB | Composite HID (Keyboard + Vendor) |
 | VID/PID | `0x1209` / `0xC55D` |
+| Keys | 3 × hot-swap mechanical switches |
+| Encoder | Rotary encoder with push button |
+| LEDs | 3 × WS2812 (NeoPixel), GRB format |
+| Connector | USB Type-C |
 
 ### Pinout
 
-| Funkcja | Pin |
-|---|---|
-| Klawisz 1 | P1.1 |
-| Klawisz 2 | P1.7 |
-| Klawisz 3 | P1.6 |
-| Enkoder A | P3.0 |
-| Enkoder B | P3.1 |
-| Przycisk enkodera | P3.3 |
-| NeoPixel (WS2812) | P3.4 |
+| Function | Pin | Function | Pin |
+|---|---|---|---|
+| Key 1 | P1.1 | Encoder A | P3.0 |
+| Key 2 | P1.7 | Encoder B | P3.1 |
+| Key 3 | P1.6 | Encoder Button | P3.3 |
+| | | NeoPixel Data | P3.4 |
 
-## Struktura projektu
+## Project Structure
 
 ```
-src/
-  board/           Firmware CH552G (C, SDCC)
-    main.c           Logika klawiatury, enkoder, NeoPixel
-    config.c/h       Konfiguracja EEPROM
-    userUsbHidKeyboard/  Composite USB HID stack
-  app/
-    main.cpp         Aplikacja konfiguracyjna Windows (C++17)
-  shared/
-    protocol.h       Współdzielony protokół (firmware + app)
-platform/ch552/    Lokalna platforma PlatformIO
+CH552G_Keyboard/
+├── platformio.ini          PlatformIO config (env:board + env:app)
+├── LICENSE                 MIT License
+├── resources.rc            Windows app resources (icon)
+├── docs/                   Documentation
+│   ├── hardware.md           Hardware reference & pinout
+│   ├── firmware.md           Firmware architecture & internals
+│   ├── configurator.md       Windows app usage & building
+│   ├── protocol.md           USB HID protocol & EEPROM layout
+│   └── images/               Photos and screenshots
+└── src/
+    ├── board/              Firmware (C, SDCC compiler)
+    │   ├── main.c            Keyboard logic, encoder, NeoPixel, bootloader
+    │   ├── config.c/h        EEPROM configuration management
+    │   └── userUsbHidKeyboard/  Custom composite USB HID stack
+    ├── app/
+    │   └── main.cpp          Windows configurator (C++17, JQB_WindowsLib)
+    └── shared/
+        └── protocol.h       Shared protocol definitions (firmware + app)
 ```
 
-Projekt używa **PlatformIO** z dwoma środowiskami:
-- **`board`** — firmware (SDCC, C)
-- **`app`** — aplikacja Windows (MinGW GCC, C++17, [JQB_WindowsLib](https://github.com/JAQUBA/JQB_WindowsLib))
+Two PlatformIO environments:
+- **`board`** — CH552G firmware (SDCC, pure C) using [JQB_CH55XPlatform](https://github.com/JAQUBA/JQB_CH55XPlatform)
+- **`app`** — Windows configurator (MinGW GCC, C++17) using [JQB_WindowsLib](https://github.com/JAQUBA/JQB_WindowsLib)
 
-## Wymagania
+## Getting Started
 
-- [PlatformIO](https://platformio.org/) (CLI lub VS Code extension)
-- Toolchain instalowany automatycznie przez `setup.ps1`
+### Prerequisites
 
-## Pierwsze uruchomienie
+- [PlatformIO](https://platformio.org/) (VS Code extension or CLI)
+- All toolchains are downloaded automatically on first build
 
-```powershell
-# Instalacja toolchaina (SDCC + ch55xduino + vnproch55x)
-powershell -ExecutionPolicy Bypass -File platform\ch552\setup.ps1
-```
-
-## Budowanie
+### Build & Flash Firmware
 
 ```bash
-# Firmware
+# Build firmware
 pio run -e board
 
-# Aplikacja Windows
-pio run -e app
-```
-
-## Wgrywanie firmware
-
-```bash
+# Upload (CH552G must be in bootloader mode)
 pio run -e board -t upload
 ```
 
-CH552G musi być w trybie bootloadera — przytrzymaj przycisk boot przy podłączaniu USB lub wyślij komendę bootloadera z aplikacji.
+**Entering bootloader mode:**
+- **Hardware:** Hold the boot button on the PCB while plugging in USB
+- **Software:** Click "Bootloader" in the configurator app
 
-## Uruchomienie aplikacji
+### Build & Run Configurator
 
 ```bash
+# Build Windows app
+pio run -e app
+
+# Build and launch
 pio run -e app -t upload
 ```
 
-## Aplikacja konfiguracyjna
+## Windows Configurator
 
-Aplikacja Windows z interfejsem zakładkowym:
+<!-- <p align="center">
+  <img src="docs/images/app_keys_tab.png" width="450" alt="Configurator App" />
+</p> -->
 
-| Zakładka | Opis |
+The configurator connects to the keyboard over USB and provides a tabbed interface:
+
+| Tab | Description |
 |---|---|
-| **Klawisze** | Przypisz kombinacje klawiszy (kliknij → naciśnij combo, np. Ctrl+F6) |
-| **LED** | Tryb podświetlenia, jasność, kolor |
-| **LED Toggle** | Włącz/wyłącz toggle LED per klawisz |
+| **Keys** | Assign key combos: click a button → press your desired combination (e.g. Ctrl+F6) |
+| **LED** | Set lighting mode (Rainbow / Static / Breathe), brightness, and color |
+| **LED Toggle** | Enable per-key LED toggle (press key to turn its LED on/off) |
+
+| Button | Action |
+|---|---|
+| **Read** | Read current config from keyboard |
+| **Write** | Write settings to keyboard EEPROM |
+| **Defaults** | Reset UI to factory defaults |
+| **Bootloader** | Enter firmware update mode |
+
+LED changes are sent in **real-time** as you adjust mode, brightness, or color — no need to click Write for preview.
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [Hardware Reference](docs/hardware.md) | Board details, pinout, LED and switch info |
+| [Firmware Guide](docs/firmware.md) | Firmware architecture, memory constraints, building |
+| [Configurator Guide](docs/configurator.md) | Windows app features, key capture, HID connection |
+| [USB Protocol](docs/protocol.md) | HID Feature Reports, EEPROM layout, key codes |
+
+## Default Key Mapping
+
+| Input | Default Action |
+|---|---|
+| Key 1 | `B` |
+| Key 2 | `F` |
+| Key 3 | `E` |
+| Encoder Button | `Enter` |
+| Encoder CW | `Shift + Up Arrow` |
+| Encoder CCW | `Shift + Down Arrow` |
+
+## Dependencies
+
+| Component | Repository |
+|---|---|
+| PlatformIO Platform | [JQB_CH55XPlatform](https://github.com/JAQUBA/JQB_CH55XPlatform) |
+| Windows GUI Library | [JQB_WindowsLib](https://github.com/JAQUBA/JQB_WindowsLib) |
+| Arduino Core | [ch55xduino](https://github.com/DeqingSun/ch55xduino) (auto-downloaded) |
+| Compiler | SDCC (auto-downloaded) |
+| Upload Tool | vnproch55x (auto-downloaded) |
+
+## Contributing
+
+Contributions are welcome! Feel free to:
+- Report bugs or request features via [Issues](../../issues)
+- Submit pull requests
+- Share your custom keymaps and use cases
+
+## License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [WCH](https://www.wch-ic.com/) for the CH552G microcontroller
+- [ch55xduino](https://github.com/DeqingSun/ch55xduino) Arduino core for CH55x
+- [pid.codes](https://pid.codes/) for the open-source USB VID `0x1209`
 
 Przyciski: **Odczytaj** / **Zapisz** / **Domyślne** / **Bootloader**
 
