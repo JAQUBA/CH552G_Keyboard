@@ -197,6 +197,8 @@ struct KeyCapture {
     uint8_t mod;             /* modifier bitmask                  */
     uint8_t code;            /* firmware key code                 */
     bool    listening;       /* waiting for keypress              */
+    uint8_t pendingMod;      /* modifier preview while listening  */
+    uint8_t lastModKey;      /* last modifier key pressed alone   */
 };
 
 static LRESULT CALLBACK KeyCaptureProc(HWND hwnd, UINT msg, WPARAM wp,
@@ -219,6 +221,8 @@ static KeyCapture* createKeyCapture(HWND parent, int x, int y, int w,
     kc->mod  = initMod;
     kc->code = initCode;
     kc->listening = false;
+    kc->pendingMod = 0;
+    kc->lastModKey = 0;
 
     std::string label = comboToName(initMod, initCode);
     std::wstring wLabel = StringUtils::utf8ToWide(label);
@@ -243,6 +247,8 @@ static LRESULT CALLBACK KeyCaptureProc(HWND hwnd, UINT msg, WPARAM wp,
         case WM_LBUTTONDOWN:
             /* Start listening */
             kc->listening = true;
+            kc->pendingMod = 0;
+            kc->lastModKey = 0;
             SetWindowTextW(hwnd, L"...");
             SetFocus(hwnd);
             return 0;
@@ -263,19 +269,40 @@ static LRESULT CALLBACK KeyCaptureProc(HWND hwnd, UINT msg, WPARAM wp,
                 uint8_t fwCode = vkToFwKey(vk);
                 if (fwCode == 0) return 0;
 
-                /* Build modifier bitmask from currently held keys */
-                uint8_t modBits = getAsyncModBits();
-
-                /* If the pressed key itself is a modifier, remove its
-                   bit from modBits (it becomes the key, not a modifier).
-                   Show intermediate state but commit — if user presses
-                   another key while holding, it will override. */
                 uint8_t keyBit = fwKeyToModBit(fwCode);
                 if (keyBit) {
-                    modBits &= ~keyBit;
+                    /* Modifier pressed — show preview, keep listening */
+                    kc->pendingMod = getAsyncModBits();
+                    kc->lastModKey = fwCode;
+                    std::string preview = modBitsToPrefix(kc->pendingMod) + "...";
+                    std::wstring wPreview = StringUtils::utf8ToWide(preview);
+                    SetWindowTextW(hwnd, wPreview.c_str());
+                } else {
+                    /* Non-modifier pressed — commit combo and stop */
+                    uint8_t modBits = getAsyncModBits();
+                    keyCaptureSetCombo(kc, modBits, fwCode);
                 }
+                return 0;
+            }
+            break;
 
-                keyCaptureSetCombo(kc, modBits, fwCode);
+        case WM_KEYUP:
+        case WM_SYSKEYUP:
+            if (kc->listening) {
+                /* If all modifiers released, commit last modifier as
+                   standalone key (e.g. user pressed only LCtrl). */
+                uint8_t nowHeld = getAsyncModBits();
+                if (nowHeld == 0 && kc->lastModKey != 0) {
+                    uint8_t keyBit = fwKeyToModBit(kc->lastModKey);
+                    uint8_t modBits = kc->pendingMod & ~keyBit;
+                    keyCaptureSetCombo(kc, modBits, kc->lastModKey);
+                } else {
+                    /* Still holding some modifiers — update preview */
+                    kc->pendingMod = nowHeld;
+                    std::string preview = modBitsToPrefix(nowHeld) + "...";
+                    std::wstring wPreview = StringUtils::utf8ToWide(preview);
+                    SetWindowTextW(hwnd, wPreview.c_str());
+                }
                 return 0;
             }
             break;
