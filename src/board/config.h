@@ -9,9 +9,13 @@
 
 /* Runtime config (kept in XRAM) */
 typedef struct {
+    uint8_t key1_mod;
     uint8_t key1_code;
+    uint8_t key2_mod;
     uint8_t key2_code;
+    uint8_t key3_mod;
     uint8_t key3_code;
+    uint8_t enc_btn_mod;
     uint8_t enc_btn_code;
     uint8_t enc_cw_mod;
     uint8_t enc_cw_key;
@@ -42,10 +46,16 @@ void config_pack_report2(uint8_t *buf);
 /* Pack g_config into Feature Report 3 buffer (7 bytes). */
 void config_pack_report3(uint8_t *buf);
 
+/* Pack g_config into Feature Report 5 buffer (7 bytes). */
+void config_pack_report5(uint8_t *buf);
+
 /* Unpack Feature Report 2 data (7 bytes) into g_config. */
 void config_unpack_report2(const uint8_t *buf);
 
 /* Unpack Feature Report 3 data (7 bytes) into g_config. */
 void config_unpack_report3(const uint8_t *buf);
+
+/* Unpack Feature Report 5 data (7 bytes) into g_config. */
+void config_unpack_report5(const uint8_t *buf);
 
 #endif /* CONFIG_H */

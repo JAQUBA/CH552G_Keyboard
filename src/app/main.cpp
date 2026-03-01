@@ -4,6 +4,8 @@
  * Connects to the keyboard via HID Feature Reports (Interface 1)
  * and allows configuring key assignments, encoder and LED settings.
  * Uses tabbed UI with keyboard shortcut capture for key assignment.
+ *
+ * All key bindings support modifier combinations (e.g. Ctrl+Alt+F6).
  */
 
 #include <Core.h>
@@ -27,13 +29,10 @@
 /*  Key code ↔ display name conversion                                */
 /* ================================================================== */
 
-/* VK → firmware key code mapping (used for keyboard shortcut capture) */
+/* VK → firmware key code mapping */
 static uint8_t vkToFwKey(UINT vk) {
-    /* Letters A-Z → lowercase ASCII 'a'-'z' */
     if (vk >= 'A' && vk <= 'Z') return (uint8_t)('a' + (vk - 'A'));
-    /* Digits 0-9 → ASCII '0'-'9' */
     if (vk >= '0' && vk <= '9') return (uint8_t)vk;
-    /* Special keys */
     switch (vk) {
         case VK_SPACE:   return ' ';
         case VK_RETURN:  return KC_RETURN;
@@ -63,7 +62,6 @@ static uint8_t vkToFwKey(UINT vk) {
         case VK_F10:     return KC_F10;
         case VK_F11:     return KC_F11;
         case VK_F12:     return KC_F12;
-        /* Modifiers — map them too so they can be used as key assignments */
         case VK_LCONTROL: return KC_LEFT_CTRL;
         case VK_RCONTROL: return KC_RIGHT_CTRL;
         case VK_LSHIFT:   return KC_LEFT_SHIFT;
@@ -72,7 +70,6 @@ static uint8_t vkToFwKey(UINT vk) {
         case VK_RMENU:    return KC_RIGHT_ALT;
         case VK_LWIN:     return KC_LEFT_GUI;
         case VK_RWIN:     return KC_RIGHT_GUI;
-        /* Punctuation etc */
         case VK_OEM_MINUS:  return '-';
         case VK_OEM_PLUS:   return '=';
         case VK_OEM_4:      return '[';
@@ -88,28 +85,24 @@ static uint8_t vkToFwKey(UINT vk) {
     }
 }
 
-/* Firmware key code → display name */
+/* Firmware key code → display name (single key, no modifier prefix) */
 static std::string fwKeyToName(uint8_t code) {
     if (code == 0) return "(brak)";
-    /* Printable ASCII letters */
     if (code >= 'a' && code <= 'z') {
         char s[2] = {(char)(code - 32), 0};
         return s;
     }
-    /* Digits */
     if (code >= '0' && code <= '9') {
         char s[2] = {(char)code, 0};
         return s;
     }
     if (code == ' ') return "Spacja";
-    /* Printable punctuation */
     if (code == '-' || code == '=' || code == '[' || code == ']' ||
         code == ';' || code == '\'' || code == ',' || code == '.' ||
         code == '/' || code == '\\' || code == '`') {
         char s[2] = {(char)code, 0};
         return s;
     }
-    /* Special keys */
     switch (code) {
         case KC_RETURN:      return "Enter";
         case KC_ESC:         return "Escape";
@@ -149,12 +142,60 @@ static std::string fwKeyToName(uint8_t code) {
 }
 
 /* ================================================================== */
-/*  Key-capture button: click to start listening, press key to assign */
+/*  Modifier bitmask helpers                                           */
+/* ================================================================== */
+
+/* Map firmware key code for a modifier to its MOD_BIT_* value.
+   Returns 0 if the key is not a modifier. */
+static uint8_t fwKeyToModBit(uint8_t code) {
+    if (code >= KC_LEFT_CTRL && code <= KC_RIGHT_GUI)
+        return (uint8_t)(1 << (code - KC_LEFT_CTRL));
+    return 0;
+}
+
+/* Build a display string for modifier bitmask, e.g. "Ctrl+Alt+" */
+static std::string modBitsToPrefix(uint8_t bits) {
+    std::string s;
+    if (bits & MOD_BIT_LCTRL)  s += "LCtrl+";
+    if (bits & MOD_BIT_RCTRL)  s += "RCtrl+";
+    if (bits & MOD_BIT_LSHIFT) s += "LShift+";
+    if (bits & MOD_BIT_RSHIFT) s += "RShift+";
+    if (bits & MOD_BIT_LALT)   s += "LAlt+";
+    if (bits & MOD_BIT_RALT)   s += "RAlt+";
+    if (bits & MOD_BIT_LGUI)   s += "LWin+";
+    if (bits & MOD_BIT_RGUI)   s += "RWin+";
+    return s;
+}
+
+/* Full display name for a key combo: "LCtrl+LAlt+F6" or just "B" */
+static std::string comboToName(uint8_t mod, uint8_t code) {
+    std::string prefix = modBitsToPrefix(mod);
+    std::string keyName = fwKeyToName(code);
+    return prefix + keyName;
+}
+
+/* Read current modifier state from keyboard hardware */
+static uint8_t getAsyncModBits() {
+    uint8_t bits = 0;
+    if (GetAsyncKeyState(VK_LCONTROL) & 0x8000) bits |= MOD_BIT_LCTRL;
+    if (GetAsyncKeyState(VK_RCONTROL) & 0x8000) bits |= MOD_BIT_RCTRL;
+    if (GetAsyncKeyState(VK_LSHIFT)   & 0x8000) bits |= MOD_BIT_LSHIFT;
+    if (GetAsyncKeyState(VK_RSHIFT)   & 0x8000) bits |= MOD_BIT_RSHIFT;
+    if (GetAsyncKeyState(VK_LMENU)    & 0x8000) bits |= MOD_BIT_LALT;
+    if (GetAsyncKeyState(VK_RMENU)    & 0x8000) bits |= MOD_BIT_RALT;
+    if (GetAsyncKeyState(VK_LWIN)     & 0x8000) bits |= MOD_BIT_LGUI;
+    if (GetAsyncKeyState(VK_RWIN)     & 0x8000) bits |= MOD_BIT_RGUI;
+    return bits;
+}
+
+/* ================================================================== */
+/*  Key-capture button: click to start, press combo to assign          */
 /* ================================================================== */
 
 struct KeyCapture {
-    HWND    hwndBtn;         /* the button showing the key name  */
-    uint8_t code;            /* current firmware key code         */
+    HWND    hwndBtn;         /* the button showing the combo name */
+    uint8_t mod;             /* modifier bitmask                  */
+    uint8_t code;            /* firmware key code                 */
     bool    listening;       /* waiting for keypress              */
 };
 
@@ -162,21 +203,24 @@ static LRESULT CALLBACK KeyCaptureProc(HWND hwnd, UINT msg, WPARAM wp,
                                         LPARAM lp, UINT_PTR idSubclass,
                                         DWORD_PTR refData);
 
-static void keyCaptureSetCode(KeyCapture* kc, uint8_t code) {
+static void keyCaptureSetCombo(KeyCapture* kc, uint8_t mod, uint8_t code) {
+    kc->mod  = mod;
     kc->code = code;
     kc->listening = false;
-    std::string label = fwKeyToName(code);
+    std::string label = comboToName(mod, code);
     std::wstring wLabel = StringUtils::utf8ToWide(label);
     SetWindowTextW(kc->hwndBtn, wLabel.c_str());
 }
 
 static KeyCapture* createKeyCapture(HWND parent, int x, int y, int w,
-                                     int h, uint8_t initialCode) {
+                                     int h, uint8_t initMod,
+                                     uint8_t initCode) {
     KeyCapture* kc = new KeyCapture();
-    kc->code = initialCode;
+    kc->mod  = initMod;
+    kc->code = initCode;
     kc->listening = false;
 
-    std::string label = fwKeyToName(initialCode);
+    std::string label = comboToName(initMod, initCode);
     std::wstring wLabel = StringUtils::utf8ToWide(label);
 
     kc->hwndBtn = CreateWindowExW(0, L"BUTTON", wLabel.c_str(),
@@ -216,10 +260,22 @@ static LRESULT CALLBACK KeyCaptureProc(HWND hwnd, UINT msg, WPARAM wp,
                 } else if (vk == VK_MENU) {
                     vk = (lp & (1 << 24)) ? VK_RMENU : VK_LMENU;
                 }
-                uint8_t code = vkToFwKey(vk);
-                if (code != 0) {
-                    keyCaptureSetCode(kc, code);
+                uint8_t fwCode = vkToFwKey(vk);
+                if (fwCode == 0) return 0;
+
+                /* Build modifier bitmask from currently held keys */
+                uint8_t modBits = getAsyncModBits();
+
+                /* If the pressed key itself is a modifier, remove its
+                   bit from modBits (it becomes the key, not a modifier).
+                   Show intermediate state but commit — if user presses
+                   another key while holding, it will override. */
+                uint8_t keyBit = fwKeyToModBit(fwCode);
+                if (keyBit) {
+                    modBits &= ~keyBit;
                 }
+
+                keyCaptureSetCombo(kc, modBits, fwCode);
                 return 0;
             }
             break;
@@ -228,7 +284,7 @@ static LRESULT CALLBACK KeyCaptureProc(HWND hwnd, UINT msg, WPARAM wp,
             if (kc->listening) {
                 /* Cancel capture on focus loss */
                 kc->listening = false;
-                std::string label = fwKeyToName(kc->code);
+                std::string label = comboToName(kc->mod, kc->code);
                 std::wstring wLabel = StringUtils::utf8ToWide(label);
                 SetWindowTextW(hwnd, wLabel.c_str());
             }
@@ -247,19 +303,6 @@ static LRESULT CALLBACK KeyCaptureProc(HWND hwnd, UINT msg, WPARAM wp,
 /* ================================================================== */
 
 struct KeyDef { const char* name; uint8_t code; };
-
-static const KeyDef modTable[] = {
-    {"Brak",        0},
-    {"Left Ctrl",   KC_LEFT_CTRL},
-    {"Left Shift",  KC_LEFT_SHIFT},
-    {"Left Alt",    KC_LEFT_ALT},
-    {"Left GUI",    KC_LEFT_GUI},
-    {"Right Ctrl",  KC_RIGHT_CTRL},
-    {"Right Shift", KC_RIGHT_SHIFT},
-    {"Right Alt",   KC_RIGHT_ALT},
-    {"Right GUI",   KC_RIGHT_GUI},
-};
-static const int MOD_COUNT = sizeof(modTable) / sizeof(modTable[0]);
 
 static const KeyDef ledModeTable[] = {
     {"Tecza",     LED_MODE_RAINBOW},
@@ -286,11 +329,6 @@ static const int COLOR_COUNT = sizeof(colorTable) / sizeof(colorTable[0]);
 /*  Helpers                                                            */
 /* ================================================================== */
 
-static int findModIndex(uint8_t code) {
-    for (int i = 0; i < MOD_COUNT; i++)
-        if (modTable[i].code == code) return i;
-    return 0;
-}
 static int findLedModeIndex(uint8_t code) {
     for (int i = 0; i < LED_MODE_COUNT; i++)
         if (ledModeTable[i].code == code) return i;
@@ -360,10 +398,8 @@ static KeyCapture* kcKey1;
 static KeyCapture* kcKey2;
 static KeyCapture* kcKey3;
 static KeyCapture* kcEncBtn;
-static Select*     selCwMod;
-static KeyCapture* kcCwKey;
-static Select*     selCcwMod;
-static KeyCapture* kcCcwKey;
+static KeyCapture* kcEncCw;
+static KeyCapture* kcEncCcw;
 
 /* Tab 1 — LED */
 static Select* selLedMode;
@@ -406,47 +442,45 @@ static bool tryConnect() {
 }
 
 /* ================================================================== */
-/*  Send only LED config (Report 3) — used for live preview            */
+/*  Send only LED config (Report 5) — used for live preview            */
 /* ================================================================== */
 
 static void sendLedConfig() {
     if (!hid.isOpen()) return;
 
     int idx;
-    uint8_t buf3[CONFIG_REPORT_SIZE];
-    memset(buf3, 0, sizeof(buf3));
-
-    buf3[0] = kcCcwKey ? kcCcwKey->code : DEFAULT_CCW_KEY;
+    uint8_t buf5[CONFIG_REPORT_SIZE];
+    memset(buf5, 0, sizeof(buf5));
 
     idx = getSelIndex(selBrightness);
     if (idx >= 0 && idx <= 25) {
-        buf3[1] = (uint8_t)(idx * 10);
-        if (idx == 25) buf3[1] = 255;
+        buf5[0] = (uint8_t)(idx * 10);
+        if (idx == 25) buf5[0] = 255;
     } else {
-        buf3[1] = DEFAULT_LED_BRT;
+        buf5[0] = DEFAULT_LED_BRT;
     }
 
     idx = getSelIndex(selLedMode);
-    buf3[2] = (idx >= 0 && idx < LED_MODE_COUNT)
+    buf5[1] = (idx >= 0 && idx < LED_MODE_COUNT)
               ? ledModeTable[idx].code : DEFAULT_LED_MODE;
 
     idx = getSelIndex(selLedColor);
     if (idx >= 0 && idx < COLOR_COUNT) {
-        buf3[3] = colorTable[idx].r;
-        buf3[4] = colorTable[idx].g;
-        buf3[5] = colorTable[idx].b;
+        buf5[2] = colorTable[idx].r;
+        buf5[3] = colorTable[idx].g;
+        buf5[4] = colorTable[idx].b;
     } else {
-        buf3[3] = DEFAULT_LED_R;
-        buf3[4] = DEFAULT_LED_G;
-        buf3[5] = DEFAULT_LED_B;
+        buf5[2] = DEFAULT_LED_R;
+        buf5[3] = DEFAULT_LED_G;
+        buf5[4] = DEFAULT_LED_B;
     }
 
-    buf3[6] = 0;
-    if (isChecked(chkToggle1)) buf3[6] |= 0x01;
-    if (isChecked(chkToggle2)) buf3[6] |= 0x02;
-    if (isChecked(chkToggle3)) buf3[6] |= 0x04;
+    buf5[5] = 0;
+    if (isChecked(chkToggle1)) buf5[5] |= 0x01;
+    if (isChecked(chkToggle2)) buf5[5] |= 0x02;
+    if (isChecked(chkToggle3)) buf5[5] |= 0x04;
 
-    hid.setFeatureReport(REPORT_ID_CONFIG2, buf3, CONFIG_REPORT_SIZE);
+    hid.setFeatureReport(REPORT_ID_LED, buf5, CONFIG_REPORT_SIZE);
 }
 
 /* ================================================================== */
@@ -458,41 +492,42 @@ static void readFromDevice() {
 
     uint8_t buf2[CONFIG_REPORT_SIZE];
     uint8_t buf3[CONFIG_REPORT_SIZE];
+    uint8_t buf5[CONFIG_REPORT_SIZE];
 
-    if (!hid.getFeatureReport(REPORT_ID_CONFIG1, buf2, CONFIG_REPORT_SIZE) ||
-        !hid.getFeatureReport(REPORT_ID_CONFIG2, buf3, CONFIG_REPORT_SIZE)) {
+    if (!hid.getFeatureReport(REPORT_ID_KEYS, buf2, CONFIG_REPORT_SIZE) ||
+        !hid.getFeatureReport(REPORT_ID_ENCODER, buf3, CONFIG_REPORT_SIZE) ||
+        !hid.getFeatureReport(REPORT_ID_LED, buf5, CONFIG_REPORT_SIZE)) {
         lblStatus->setText(L"Blad odczytu!");
         return;
     }
 
-    /* Report 2: keys + encoder */
-    keyCaptureSetCode(kcKey1,   buf2[0]);
-    keyCaptureSetCode(kcKey2,   buf2[1]);
-    keyCaptureSetCode(kcKey3,   buf2[2]);
-    keyCaptureSetCode(kcEncBtn, buf2[3]);
-    setSelIndex(selCwMod,  findModIndex(buf2[4]));
-    keyCaptureSetCode(kcCwKey,  buf2[5]);
-    setSelIndex(selCcwMod, findModIndex(buf2[6]));
+    /* Report 2: key mapping (mod+code pairs) */
+    keyCaptureSetCombo(kcKey1,   buf2[0], buf2[1]);
+    keyCaptureSetCombo(kcKey2,   buf2[2], buf2[3]);
+    keyCaptureSetCombo(kcKey3,   buf2[4], buf2[5]);
 
-    /* Report 3: ccw key, LED config, toggle */
-    keyCaptureSetCode(kcCcwKey, buf3[0]);
+    /* Report 3: encoder mapping */
+    keyCaptureSetCombo(kcEncBtn, buf2[6], buf3[0]);  /* mod in report2[6], code in report3[0] */
+    keyCaptureSetCombo(kcEncCw,  buf3[1], buf3[2]);
+    keyCaptureSetCombo(kcEncCcw, buf3[3], buf3[4]);
 
+    /* Report 5: LED config */
     {
-        int brtIdx = buf3[1] / 10;
+        int brtIdx = buf5[0] / 10;
         if (brtIdx > 25) brtIdx = 25;
         setSelIndex(selBrightness, brtIdx);
     }
 
-    setSelIndex(selLedMode,  findLedModeIndex(buf3[2]));
-    setSelIndex(selLedColor, findColorIndex(buf3[3], buf3[4], buf3[5]));
+    setSelIndex(selLedMode,  findLedModeIndex(buf5[1]));
+    setSelIndex(selLedColor, findColorIndex(buf5[2], buf5[3], buf5[4]));
 
     /* LED toggle checkboxes */
     SendMessageW(chkToggle1, BM_SETCHECK,
-                 (buf3[6] & 0x01) ? BST_CHECKED : BST_UNCHECKED, 0);
+                 (buf5[5] & 0x01) ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessageW(chkToggle2, BM_SETCHECK,
-                 (buf3[6] & 0x02) ? BST_CHECKED : BST_UNCHECKED, 0);
+                 (buf5[5] & 0x02) ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessageW(chkToggle3, BM_SETCHECK,
-                 (buf3[6] & 0x04) ? BST_CHECKED : BST_UNCHECKED, 0);
+                 (buf5[5] & 0x04) ? BST_CHECKED : BST_UNCHECKED, 0);
 
     /* Sync polling state so loop() doesn't immediately re-send */
     prevLedModeIdx = getSelIndex(selLedMode);
@@ -511,54 +546,60 @@ static void writeToDevice() {
     int idx;
     uint8_t buf2[CONFIG_REPORT_SIZE];
     uint8_t buf3[CONFIG_REPORT_SIZE];
+    uint8_t buf5[CONFIG_REPORT_SIZE];
     memset(buf2, 0, sizeof(buf2));
     memset(buf3, 0, sizeof(buf3));
+    memset(buf5, 0, sizeof(buf5));
 
-    /* Report 2 */
-    buf2[0] = kcKey1->code;
-    buf2[1] = kcKey2->code;
-    buf2[2] = kcKey3->code;
-    buf2[3] = kcEncBtn->code;
-    idx = getSelIndex(selCwMod);
-    buf2[4] = (idx >= 0 && idx < MOD_COUNT) ? modTable[idx].code : 0;
-    buf2[5] = kcCwKey->code;
-    idx = getSelIndex(selCcwMod);
-    buf2[6] = (idx >= 0 && idx < MOD_COUNT) ? modTable[idx].code : 0;
+    /* Report 2: key mapping */
+    buf2[0] = kcKey1->mod;
+    buf2[1] = kcKey1->code;
+    buf2[2] = kcKey2->mod;
+    buf2[3] = kcKey2->code;
+    buf2[4] = kcKey3->mod;
+    buf2[5] = kcKey3->code;
+    buf2[6] = kcEncBtn->mod;
 
-    /* Report 3 */
-    buf3[0] = kcCcwKey->code;
+    /* Report 3: encoder mapping */
+    buf3[0] = kcEncBtn->code;
+    buf3[1] = kcEncCw->mod;
+    buf3[2] = kcEncCw->code;
+    buf3[3] = kcEncCcw->mod;
+    buf3[4] = kcEncCcw->code;
 
+    /* Report 5: LED config */
     idx = getSelIndex(selBrightness);
     if (idx >= 0 && idx <= 25) {
-        buf3[1] = (uint8_t)(idx * 10);
-        if (idx == 25) buf3[1] = 255;
+        buf5[0] = (uint8_t)(idx * 10);
+        if (idx == 25) buf5[0] = 255;
     } else {
-        buf3[1] = DEFAULT_LED_BRT;
+        buf5[0] = DEFAULT_LED_BRT;
     }
 
     idx = getSelIndex(selLedMode);
-    buf3[2] = (idx >= 0 && idx < LED_MODE_COUNT)
+    buf5[1] = (idx >= 0 && idx < LED_MODE_COUNT)
               ? ledModeTable[idx].code : DEFAULT_LED_MODE;
 
     idx = getSelIndex(selLedColor);
     if (idx >= 0 && idx < COLOR_COUNT) {
-        buf3[3] = colorTable[idx].r;
-        buf3[4] = colorTable[idx].g;
-        buf3[5] = colorTable[idx].b;
+        buf5[2] = colorTable[idx].r;
+        buf5[3] = colorTable[idx].g;
+        buf5[4] = colorTable[idx].b;
     } else {
-        buf3[3] = DEFAULT_LED_R;
-        buf3[4] = DEFAULT_LED_G;
-        buf3[5] = DEFAULT_LED_B;
+        buf5[2] = DEFAULT_LED_R;
+        buf5[3] = DEFAULT_LED_G;
+        buf5[4] = DEFAULT_LED_B;
     }
 
     /* LED toggle bitmask */
-    buf3[6] = 0;
-    if (isChecked(chkToggle1)) buf3[6] |= 0x01;
-    if (isChecked(chkToggle2)) buf3[6] |= 0x02;
-    if (isChecked(chkToggle3)) buf3[6] |= 0x04;
+    buf5[5] = 0;
+    if (isChecked(chkToggle1)) buf5[5] |= 0x01;
+    if (isChecked(chkToggle2)) buf5[5] |= 0x02;
+    if (isChecked(chkToggle3)) buf5[5] |= 0x04;
 
-    if (!hid.setFeatureReport(REPORT_ID_CONFIG1, buf2, CONFIG_REPORT_SIZE) ||
-        !hid.setFeatureReport(REPORT_ID_CONFIG2, buf3, CONFIG_REPORT_SIZE)) {
+    if (!hid.setFeatureReport(REPORT_ID_KEYS, buf2, CONFIG_REPORT_SIZE) ||
+        !hid.setFeatureReport(REPORT_ID_ENCODER, buf3, CONFIG_REPORT_SIZE) ||
+        !hid.setFeatureReport(REPORT_ID_LED, buf5, CONFIG_REPORT_SIZE)) {
         lblStatus->setText(L"Blad zapisu!");
         return;
     }
@@ -574,14 +615,12 @@ static void writeToDevice() {
 }
 
 static void resetDefaults() {
-    keyCaptureSetCode(kcKey1,   DEFAULT_KEY1);
-    keyCaptureSetCode(kcKey2,   DEFAULT_KEY2);
-    keyCaptureSetCode(kcKey3,   DEFAULT_KEY3);
-    keyCaptureSetCode(kcEncBtn, DEFAULT_ENC_BTN);
-    setSelIndex(selCwMod,  findModIndex(DEFAULT_CW_MOD));
-    keyCaptureSetCode(kcCwKey,  DEFAULT_CW_KEY);
-    setSelIndex(selCcwMod, findModIndex(DEFAULT_CCW_MOD));
-    keyCaptureSetCode(kcCcwKey, DEFAULT_CCW_KEY);
+    keyCaptureSetCombo(kcKey1,   DEFAULT_KEY1_MOD,    DEFAULT_KEY1);
+    keyCaptureSetCombo(kcKey2,   DEFAULT_KEY2_MOD,    DEFAULT_KEY2);
+    keyCaptureSetCombo(kcKey3,   DEFAULT_KEY3_MOD,    DEFAULT_KEY3);
+    keyCaptureSetCombo(kcEncBtn, DEFAULT_ENC_BTN_MOD, DEFAULT_ENC_BTN);
+    keyCaptureSetCombo(kcEncCw,  DEFAULT_CW_MOD,      DEFAULT_CW_KEY);
+    keyCaptureSetCombo(kcEncCcw, DEFAULT_CCW_MOD,     DEFAULT_CCW_KEY);
     setSelIndex(selBrightness, DEFAULT_LED_BRT / 10);
     setSelIndex(selLedMode,    findLedModeIndex(DEFAULT_LED_MODE));
     setSelIndex(selLedColor,
@@ -662,53 +701,38 @@ void setup() {
     int y = 10;
 
     createLabel(tabKeys, LX, y, LW, 20, L"Klawisz 1:");
-    kcKey1 = createKeyCapture(tabKeys, SX, y - 2, SW, 24, DEFAULT_KEY1);
+    kcKey1 = createKeyCapture(tabKeys, SX, y - 2, SW, 24,
+                              DEFAULT_KEY1_MOD, DEFAULT_KEY1);
     y += ROW;
 
     createLabel(tabKeys, LX, y, LW, 20, L"Klawisz 2:");
-    kcKey2 = createKeyCapture(tabKeys, SX, y - 2, SW, 24, DEFAULT_KEY2);
+    kcKey2 = createKeyCapture(tabKeys, SX, y - 2, SW, 24,
+                              DEFAULT_KEY2_MOD, DEFAULT_KEY2);
     y += ROW;
 
     createLabel(tabKeys, LX, y, LW, 20, L"Klawisz 3:");
-    kcKey3 = createKeyCapture(tabKeys, SX, y - 2, SW, 24, DEFAULT_KEY3);
+    kcKey3 = createKeyCapture(tabKeys, SX, y - 2, SW, 24,
+                              DEFAULT_KEY3_MOD, DEFAULT_KEY3);
     y += ROW;
 
     createLabel(tabKeys, LX, y, LW, 20, L"Przycisk enkodera:");
-    kcEncBtn = createKeyCapture(tabKeys, SX, y - 2, SW, 24, DEFAULT_ENC_BTN);
+    kcEncBtn = createKeyCapture(tabKeys, SX, y - 2, SW, 24,
+                                DEFAULT_ENC_BTN_MOD, DEFAULT_ENC_BTN);
     y += ROW + 12;
 
-    /* Encoder CW */
-    createLabel(tabKeys, LX, y, LW + SW, 20,
-                L"--- Enkoder: obrot w prawo ---");
-    y += 22;
-
-    createLabel(tabKeys, LX, y, LW, 20, L"Modyfikator:");
-    selCwMod = new Select(SX, y - 2, SW, SELDH, "", nullptr);
-    selCwMod->create(tabKeys);
+    createLabel(tabKeys, LX, y, LW, 20, L"Enkoder (prawo):");
+    kcEncCw = createKeyCapture(tabKeys, SX, y - 2, SW, 24,
+                               DEFAULT_CW_MOD, DEFAULT_CW_KEY);
     y += ROW;
 
-    createLabel(tabKeys, LX, y, LW, 20, L"Klawisz:");
-    kcCwKey = createKeyCapture(tabKeys, SX, y - 2, SW, 24, DEFAULT_CW_KEY);
-    y += ROW + 12;
+    createLabel(tabKeys, LX, y, LW, 20, L"Enkoder (lewo):");
+    kcEncCcw = createKeyCapture(tabKeys, SX, y - 2, SW, 24,
+                                DEFAULT_CCW_MOD, DEFAULT_CCW_KEY);
+    y += ROW + 10;
 
-    /* Encoder CCW */
-    createLabel(tabKeys, LX, y, LW + SW, 20,
-                L"--- Enkoder: obrot w lewo ---");
-    y += 22;
-
-    createLabel(tabKeys, LX, y, LW, 20, L"Modyfikator:");
-    selCcwMod = new Select(SX, y - 2, SW, SELDH, "", nullptr);
-    selCcwMod->create(tabKeys);
-    y += ROW;
-
-    createLabel(tabKeys, LX, y, LW, 20, L"Klawisz:");
-    kcCcwKey = createKeyCapture(tabKeys, SX, y - 2, SW, 24, DEFAULT_CCW_KEY);
-
-    /* Fill modifier selects */
-    for (int i = 0; i < MOD_COUNT; i++) {
-        selCwMod->addItem(modTable[i].name);
-        selCcwMod->addItem(modTable[i].name);
-    }
+    createLabel(tabKeys, LX, y, LW + SW, 40,
+        L"Kliknij przycisk, potem nacisnij\n"
+        L"kombinacje klawiszy (np. Ctrl+F6).");
 
     /* ================================================================ */
     /*  Tab 1: LED                                                      */
@@ -788,13 +812,21 @@ void setup() {
             if (!tryConnect()) return;
             uint8_t cmdBuf[CMD_REPORT_SIZE];
             cmdBuf[0] = CMD_BOOTLOADER;
-            if (hid.setFeatureReport(REPORT_ID_COMMAND, cmdBuf,
-                                     CMD_REPORT_SIZE)) {
-                lblStatus->setText(L"Bootloader aktywny!");
-                hid.close();
-                SetWindowTextA(btnConnect->getHandle(), "Polacz");
+            /* Send bootloader command.  Firmware sets a flag and completes
+               the USB transfer, then enters bootloader in its main loop.
+               The device will disconnect shortly after we get the ACK. */
+            bool ok = hid.setFeatureReport(REPORT_ID_COMMAND, cmdBuf,
+                                           CMD_REPORT_SIZE);
+            /* Close HID handle immediately — device is about to disappear */
+            hid.close();
+            SetWindowTextA(btnConnect->getHandle(), "Polacz");
+            if (ok) {
+                lblStatus->setText(L"Bootloader aktywny — mozna wgrac firmware");
             } else {
-                lblStatus->setText(L"Blad komendy bootloadera!");
+                /* Even if the call failed (device disconnected mid-transfer),
+                   the command was likely received — device may already be
+                   in bootloader mode. */
+                lblStatus->setText(L"Wyslano komende bootloadera (urzadzenie odlaczone)");
             }
         });
     window->add(btnBootloader);

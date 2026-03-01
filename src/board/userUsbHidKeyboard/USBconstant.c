@@ -64,7 +64,7 @@ __code uint8_t VendorReportDescriptor[] = {
     0x95, 0x01,       //   REPORT_COUNT (1)
     0x81, 0x02,       //   INPUT (Data,Var,Abs)
 
-    /* Feature Report ID 2 — key / encoder config (7 bytes) */
+    /* Feature Report ID 2 — key mapping (7 bytes) */
     0x85, 0x02,       //   REPORT_ID (2)
     0x09, 0x02,       //   USAGE (Vendor Usage 2)
     0x15, 0x00,       //   LOGICAL_MINIMUM (0)
@@ -73,7 +73,7 @@ __code uint8_t VendorReportDescriptor[] = {
     0x95, 0x07,       //   REPORT_COUNT (7)
     0xB1, 0x02,       //   FEATURE (Data,Var,Abs)
 
-    /* Feature Report ID 3 — LED / extras config (7 bytes) */
+    /* Feature Report ID 3 — encoder mapping (7 bytes) */
     0x85, 0x03,       //   REPORT_ID (3)
     0x09, 0x03,       //   USAGE (Vendor Usage 3)
     0x15, 0x00,       //   LOGICAL_MINIMUM (0)
@@ -89,6 +89,15 @@ __code uint8_t VendorReportDescriptor[] = {
     0x26, 0xFF, 0x00, //   LOGICAL_MAXIMUM (255)
     0x75, 0x08,       //   REPORT_SIZE (8)
     0x95, 0x01,       //   REPORT_COUNT (1)
+    0xB1, 0x02,       //   FEATURE (Data,Var,Abs)
+
+    /* Feature Report ID 5 — LED configuration (7 bytes) */
+    0x85, 0x05,       //   REPORT_ID (5)
+    0x09, 0x05,       //   USAGE (Vendor Usage 5)
+    0x15, 0x00,       //   LOGICAL_MINIMUM (0)
+    0x26, 0xFF, 0x00, //   LOGICAL_MAXIMUM (255)
+    0x75, 0x08,       //   REPORT_SIZE (8)
+    0x95, 0x07,       //   REPORT_COUNT (7)
     0xB1, 0x02,       //   FEATURE (Data,Var,Abs)
 
     0xC0              // END_COLLECTION

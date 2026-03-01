@@ -29,6 +29,7 @@ volatile __xdata uint8_t UsbConfig;
 __code uint8_t *__data pDescr;
 
 volatile uint8_t usbMsgFlags = 0;
+volatile __xdata uint8_t bootloader_request = 0;
 
 __xdata uint8_t keyboardProtocol = 1;   /* 0=boot  1=report */
 __xdata uint8_t keyboardLedStatus = 0;
@@ -99,13 +100,17 @@ void USB_EP0_SETUP() {
             __data uint8_t rid   = UsbSetupBuf->wValueL;
             if (rtype == 3) { /* Feature report */
               /* HID spec: Report ID is first byte in DATA stage */
-              if (rid == REPORT_ID_CONFIG1) {
-                Ep0Buffer[0] = REPORT_ID_CONFIG1;
+              if (rid == REPORT_ID_KEYS) {
+                Ep0Buffer[0] = REPORT_ID_KEYS;
                 config_pack_report2(Ep0Buffer + 1);
                 len = 1 + CONFIG_REPORT_SIZE;
-              } else if (rid == REPORT_ID_CONFIG2) {
-                Ep0Buffer[0] = REPORT_ID_CONFIG2;
+              } else if (rid == REPORT_ID_ENCODER) {
+                Ep0Buffer[0] = REPORT_ID_ENCODER;
                 config_pack_report3(Ep0Buffer + 1);
+                len = 1 + CONFIG_REPORT_SIZE;
+              } else if (rid == REPORT_ID_LED) {
+                Ep0Buffer[0] = REPORT_ID_LED;
+                config_pack_report5(Ep0Buffer + 1);
                 len = 1 + CONFIG_REPORT_SIZE;
               } else {
                 len = 0xFF;
@@ -358,15 +363,18 @@ void USB_EP0_OUT() {
     if (setReportIface == 1 && setReportType == 3) {
       /* HID spec: Report ID is first byte of DATA stage (Ep0Buffer[0]).
        * Actual report data starts at Ep0Buffer[1]. */
-      if (setReportId == REPORT_ID_CONFIG1) {
+      if (setReportId == REPORT_ID_KEYS) {
         config_unpack_report2(Ep0Buffer + 1);
         config_save();
-      } else if (setReportId == REPORT_ID_CONFIG2) {
+      } else if (setReportId == REPORT_ID_ENCODER) {
         config_unpack_report3(Ep0Buffer + 1);
+        config_save();
+      } else if (setReportId == REPORT_ID_LED) {
+        config_unpack_report5(Ep0Buffer + 1);
         config_save();
       } else if (setReportId == REPORT_ID_COMMAND) {
         if (Ep0Buffer[1] == CMD_BOOTLOADER) {
-          enterBootloader();
+          bootloader_request = 1;  /* defer to main loop so USB STATUS stage completes */
         }
       }
     } else {

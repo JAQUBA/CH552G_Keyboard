@@ -16,6 +16,7 @@
 
 #include <Arduino.h>
 #include "userUsbHidKeyboard/USBHIDKeyboard.h"
+#include "userUsbHidKeyboard/USBhandler.h"
 #include "config.h"
 #include "protocol.h"
 #include <WS2812.h>
@@ -81,13 +82,32 @@ void hsv_to_rgb(uint8_t h, uint8_t s, uint8_t v,
 }
 
 /* ============================================================ */
+/*  Modifier bitmask helpers                                     */
+/* ============================================================ */
+static void press_mod_bits(uint8_t bits) {
+    uint8_t i;
+    for (i = 0; i < 8; i++) {
+        if (bits & (1 << i)) Keyboard_press(0x80 + i);
+    }
+}
+
+static void release_mod_bits(uint8_t bits) {
+    uint8_t i;
+    for (i = 0; i < 8; i++) {
+        if (bits & (1 << i)) Keyboard_release(0x80 + i);
+    }
+}
+
+/* ============================================================ */
 /*  Button helper                                                */
 /* ============================================================ */
-static void handle_button(uint8_t pin, uint8_t key, uint8_t *prev, uint8_t led_idx) {
+static void handle_button(uint8_t pin, uint8_t mod, uint8_t key,
+                          uint8_t *prev, uint8_t led_idx) {
     uint8_t pressed = !digitalRead(pin);
     if (pressed != *prev) {
         *prev = pressed;
         if (pressed) {
+            press_mod_bits(mod);
             Keyboard_press(key);
             /* If this key has LED toggle enabled, flip the LED state */
             if (g_config.led_toggle & (1 << led_idx)) {
@@ -95,6 +115,7 @@ static void handle_button(uint8_t pin, uint8_t key, uint8_t *prev, uint8_t led_i
             }
         } else {
             Keyboard_release(key);
+            release_mod_bits(mod);
         }
     }
 }
@@ -103,27 +124,32 @@ static void handle_button(uint8_t pin, uint8_t key, uint8_t *prev, uint8_t led_i
 /*  Encoder pulse helper                                         */
 /* ============================================================ */
 static void encoder_pulse(uint8_t mod, uint8_t key) {
-    if (mod) Keyboard_press(mod);
+    press_mod_bits(mod);
     Keyboard_press(key);
     delay(ENC_PULSE_MS);
     Keyboard_release(key);
-    if (mod) Keyboard_release(mod);
+    release_mod_bits(mod);
 }
 
 /* ============================================================ */
 /*  Enter USB bootloader                                         */
 /* ============================================================ */
 void enterBootloader(void) {
-    EA = 0;                    /* disable all interrupts first */
-    USB_INT_EN = 0;            /* disable USB interrupts       */
-    USB_CTRL   = 0;            /* disable USB controller       */
-    UDEV_CTRL  = 0;            /* release D+ pull-up — host sees disconnect */
-    delayMicroseconds(50000);  /* busy-wait ~50 ms             */
-    delayMicroseconds(50000);  /* ~100 ms total                */
-    delayMicroseconds(50000);  /* ~150 ms                      */
-    delayMicroseconds(50000);  /* ~200 ms — enough for host    */
-    __asm__("ljmp 0x3800\n"); /* jump to ROM bootloader       */
-    while (1);                 /* should never reach here      */
+    EA = 0;                    /* disable all interrupts         */
+    USB_INT_EN = 0;            /* disable USB interrupts         */
+    USB_CTRL   = 0;            /* disable USB, release D+ pull-up*/
+    UDEV_CTRL  = 0;            /* disable USB port               */
+    TMOD = 0;                  /* stop all timers                */
+    USB_DEV_AD = 0;            /* reset USB device address       */
+    USB_INT_FG = 0xFF;         /* clear pending USB flags        */
+    /* ~250 ms — let Windows fully deregister the HID device */
+    delayMicroseconds(50000);
+    delayMicroseconds(50000);
+    delayMicroseconds(50000);
+    delayMicroseconds(50000);
+    delayMicroseconds(50000);
+    __asm__("ljmp 0x3800\n"); /* jump to ROM bootloader         */
+    while (1);                 /* should never reach here        */
 }
 
 /* ============================================================ */
@@ -157,11 +183,16 @@ void setup() {
 void loop() {
     uint8_t i, r, g, b;
 
+    /* --- Bootloader request (deferred from USB ISR) --- */
+    if (bootloader_request) {
+        enterBootloader();  /* never returns */
+    }
+
     /* --- Buttons (use runtime config) --- */
-    handle_button(KEY1_PIN,    g_config.key1_code,    &key1_prev,    0);
-    handle_button(KEY2_PIN,    g_config.key2_code,    &key2_prev,    1);
-    handle_button(KEY3_PIN,    g_config.key3_code,    &key3_prev,    2);
-    handle_button(ENC_BTN_PIN, g_config.enc_btn_code, &enc_btn_prev, 3);
+    handle_button(KEY1_PIN,    g_config.key1_mod,    g_config.key1_code,    &key1_prev,    0);
+    handle_button(KEY2_PIN,    g_config.key2_mod,    g_config.key2_code,    &key2_prev,    1);
+    handle_button(KEY3_PIN,    g_config.key3_mod,    g_config.key3_code,    &key3_prev,    2);
+    handle_button(ENC_BTN_PIN, g_config.enc_btn_mod, g_config.enc_btn_code, &enc_btn_prev, 3);
 
     /* --- Rotary encoder --- */
     {
