@@ -4,6 +4,10 @@
 
 Firmware dla 3-klawiszowej klawiatury HID z enkoderem obrotowym i podświetleniem NeoPixel,
 opartej na mikrokontrolerze **WCH CH552G** (architektura MCS51 / 8051).  
+Projekt zawiera dwa środowiska PlatformIO:
+- **board** — firmware CH552G (SDCC, język C)
+- **app** — aplikacja konfiguracyjna Windows (MinGW GCC, C++17, biblioteka JQB_WindowsLib)
+
 Budowany za pomocą **PlatformIO** z lokalną platformą (`platform/ch552`) i frameworkiem **ch55xduino**.
 
 ## Architektura i ograniczenia
@@ -36,7 +40,7 @@ Budowany za pomocą **PlatformIO** z lokalną platformą (`platform/ch552`) i fr
 Firmware działa jako **klawiatura HID** (nie CDC/Serial).
 
 - W `platformio.ini` zdefiniowane jest `-DUSER_USB_RAM=148` — wyłącza domyślny stos USB (CDC) z core ch55xduino i włącza własny.
-- Własna implementacja USB HID znajduje się w `src/userUsbHidKeyboard/`:
+- Własna implementacja USB HID znajduje się w `src/board/userUsbHidKeyboard/`:
   - `USBconstant.c/h` — deskryptory USB (VID/PID, HID Report Descriptor)
   - `USBhandler.c/h` — obsługa przerwań USB (EP0, EP1)
   - `USBHIDKeyboard.c/h` — API klawiatury: `Keyboard_press()`, `Keyboard_release()`, `Keyboard_write()`
@@ -88,7 +92,7 @@ ch55xduino używa schematu: **`NumerPortu * 10 + NumerPinu`**
 
 ## Konfiguracja klawiszy i enkodera
 
-Mapowanie klawiszy jest definiowane przez `#define` na początku `src/main.c` (sekcja **QUICK CONFIG**):
+Mapowanie klawiszy jest definiowane przez `#define` na początku `src/board/main.c` (sekcja **QUICK CONFIG**):
 
 ```c
 // --- 3 keys with LEDs ---
@@ -161,13 +165,20 @@ void USBSerial_write(uint8_t c);
 ## Struktura projektu
 
 ```
-platformio.ini              # Konfiguracja PlatformIO (build_flags, src_filter)
+platformio.ini              # Konfiguracja PlatformIO (env:board + env:app)
+resources.rc                # Zasoby Windows dla aplikacji (ikona)
 src/
-  main.c                    # Firmware: HID keyboard + encoder + NeoPixel
-  userUsbHidKeyboard/       # Własna implementacja USB HID
-    USBconstant.c/h         #   Deskryptory USB
-    USBhandler.c/h          #   Obsługa przerwań USB
-    USBHIDKeyboard.c/h      #   API klawiatury (press/release/write)
+  board/
+    main.c                  # Firmware: HID keyboard + encoder + NeoPixel
+    config.c/h              # Konfiguracja klawiatury (odczyt/zapis z Flash)
+    userUsbHidKeyboard/     # Własna implementacja USB HID
+      USBconstant.c/h       #   Deskryptory USB
+      USBhandler.c/h        #   Obsługa przerwań USB
+      USBHIDKeyboard.c/h    #   API klawiatury (press/release/write)
+  app/
+    main.cpp                # Aplikacja konfiguracyjna Windows (C++17)
+  shared/
+    protocol.h              # Wspólny protokół komunikacji board ↔ app
 platform/ch552/
   platform.json             # Manifest platformy PlatformIO
   platform.py               # Klasa platformy PlatformIO
@@ -186,11 +197,17 @@ platform/ch552/
 ## Budowanie i wgrywanie
 
 ```bash
-# Budowanie (automatycznie regeneruje .vscode/c_cpp_properties.json)
-pio run
+# Budowanie firmware (automatycznie regeneruje .vscode/c_cpp_properties.json)
+pio run -e board
 
-# Wgrywanie (USB bootloader — podłącz CH552G w trybie bootloadera)
-pio run --target upload
+# Wgrywanie firmware (USB bootloader — podłącz CH552G w trybie bootloadera)
+pio run -e board -t upload
+
+# Budowanie aplikacji konfiguracyjnej Windows
+pio run -e app
+
+# Uruchomienie aplikacji Windows
+pio run -e app -t upload
 
 # Pierwsze uruchomienie — instalacja toolchaina (SDCC + ch55xduino + vnproch55x)
 powershell -ExecutionPolicy Bypass -File platform\ch552\setup.ps1
@@ -220,5 +237,7 @@ Builder automatycznie generuje `.vscode/c_cpp_properties.json` przy każdym `pio
 6. Debouncing przycisków — realizowany przez polling w pętli z `SCAN_DELAY_MS` (5 ms).
 7. Enkoder obsługiwany przez polling (detekcja zbocza na kanale A, odczyt B dla kierunku).
 8. NeoPixel: użyj `set_pixel_for_GRB_LED()` + `neopixel_show_P3_4()`. Bufor w XRAM.
-9. Konfiguracja klawiszy — sekcja `QUICK CONFIG` na początku `src/main.c` (define'y).
+9. Konfiguracja klawiszy — sekcja `QUICK CONFIG` na początku `src/board/main.c` (define'y).
 10. Unikaj `printf` / `sprintf` — zbyt duże dla 8051.
+11. **Aplikacja Windows (env:app):** Używa `platform = native` i biblioteki `JQB_WindowsLib` jako `lib_deps`. Flagi C++17, UNICODE i linkowanie dodawane automatycznie przez bibliotekę.
+12. **Kod współdzielony:** `src/shared/protocol.h` definiuje wspólny protokół między firmware a aplikacją.
