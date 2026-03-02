@@ -873,6 +873,13 @@ void setup() {
 void loop() {
     /* Auto-send LED config when any LED-related control changes */
     if (hid.isOpen() && selLedMode && selBrightness && selLedColor) {
+        /* Guard: if UI controls are destroyed (app closing), close HID
+           to prevent sending garbage defaults to the device. */
+        if (!IsWindow(selLedMode->getHandle())) {
+            hid.close();
+            return;
+        }
+
         int curMode  = getSelIndex(selLedMode);
         int curBrt   = getSelIndex(selBrightness);
         int curColor = getSelIndex(selLedColor);
