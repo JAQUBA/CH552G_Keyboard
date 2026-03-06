@@ -100,6 +100,7 @@ Keyboard configuration is done via **HID Feature Reports** on EP0 (control trans
 | Value | Action |
 |---|---|
 | `0x42` (`CMD_BOOTLOADER`) | Enter USB bootloader |
+| `0x43` (`CMD_SAVE`) | Persist g_config to EEPROM |
 
 #### Report ID 5 — LED Configuration (7 data bytes):
 
@@ -227,7 +228,7 @@ extern __xdata KeyboardConfig g_config;
 | Function | Description |
 |---|---|
 | `config_load()` | Load from EEPROM; if magic byte missing → `config_reset()` |
-| `config_save()` | Save to EEPROM (26 bytes + magic) |
+| `config_save()` | Save to EEPROM (only changed bytes, compare-before-write) |
 | `config_reset()` | Restore defaults and save |
 | `config_pack_report2(buf)` | Pack g_config → Report ID 2 buffer (7 B) — key mapping |
 | `config_unpack_report2(buf)` | Unpack Report ID 2 buffer → g_config |
@@ -577,6 +578,7 @@ The builder automatically generates `.vscode/c_cpp_properties.json` on every `pi
 4. Firmware runs as **composite HID** — `USBSerial_*()` is **unavailable**.
 5. For key handling: `Keyboard_press()` / `Keyboard_release()` from `USBHIDKeyboard.h`.
 6. Key configuration is in `g_config` (EEPROM-backed) — **not in `#define`**.
+6a. SET_REPORT only updates `g_config` in RAM — EEPROM persist requires explicit `CMD_SAVE` (Feature Report 4, byte `0x43`).
 7. For GET_REPORT: `Ep0Buffer[0] = Report ID`, data from `Ep0Buffer[1]`, `len = 1 + CONFIG_REPORT_SIZE`.
 8. For SET_REPORT (EP0_OUT): data from `Ep0Buffer[1]` (skip Report ID at [0]).
 9. Debouncing — polling in `loop()` with `SCAN_DELAY_MS` (5 ms).
