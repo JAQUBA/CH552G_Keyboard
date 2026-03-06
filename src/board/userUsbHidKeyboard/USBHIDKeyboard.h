@@ -75,6 +75,10 @@ void Keyboard_print(const char *str);
 
 uint8_t Keyboard_getLEDStatus(void);
 
+/* Consumer Control (multimedia keys) */
+void Consumer_press(uint16_t usage);
+void Consumer_release(void);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

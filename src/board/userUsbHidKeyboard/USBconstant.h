@@ -31,7 +31,7 @@
 
 /* Interface 0: Keyboard */
 #define KEYBOARD_EPADDR  0x81
-#define KEYBOARD_EPSIZE  8
+#define KEYBOARD_EPSIZE  16
 
 /* Interface 1: Vendor config */
 #define VENDOR_EPADDR    0x82

@@ -112,6 +112,14 @@ void USB_EP0_SETUP() {
                 Ep0Buffer[0] = REPORT_ID_LED;
                 config_pack_report5(Ep0Buffer + 1);
                 len = 1 + CONFIG_REPORT_SIZE;
+              } else if (rid == REPORT_ID_LONG_KEYS) {
+                Ep0Buffer[0] = REPORT_ID_LONG_KEYS;
+                config_pack_report6(Ep0Buffer + 1);
+                len = 1 + CONFIG_REPORT_SIZE;
+              } else if (rid == REPORT_ID_LONG_ENC) {
+                Ep0Buffer[0] = REPORT_ID_LONG_ENC;
+                config_pack_report7(Ep0Buffer + 1);
+                len = 1 + CONFIG_REPORT_SIZE;
               } else {
                 len = 0xFF;
               }
@@ -371,6 +379,12 @@ void USB_EP0_OUT() {
         config_save();
       } else if (setReportId == REPORT_ID_LED) {
         config_unpack_report5(Ep0Buffer + 1);
+        config_save();
+      } else if (setReportId == REPORT_ID_LONG_KEYS) {
+        config_unpack_report6(Ep0Buffer + 1);
+        config_save();
+      } else if (setReportId == REPORT_ID_LONG_ENC) {
+        config_unpack_report7(Ep0Buffer + 1);
         config_save();
       } else if (setReportId == REPORT_ID_COMMAND) {
         if (Ep0Buffer[1] == CMD_BOOTLOADER) {

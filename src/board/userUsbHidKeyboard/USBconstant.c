@@ -11,11 +11,13 @@
 /*  that sizeof() is available for HIDReportLength fields)             */
 /* ================================================================== */
 
-/* --- Keyboard Report Descriptor (standard boot keyboard) ---------- */
+/* --- Keyboard Report Descriptor (keyboard + consumer control) ---- */
 __code uint8_t KeyboardReportDescriptor[] = {
+    /* Report ID 1: Standard Keyboard */
     0x05, 0x01, // USAGE_PAGE (Generic Desktop)
     0x09, 0x06, // USAGE (Keyboard)
     0xa1, 0x01, // COLLECTION (Application)
+    0x85, 0x01, //   REPORT_ID (1)
     0x05, 0x07, //   USAGE_PAGE (Keyboard)
     0x19, 0xe0, //   USAGE_MINIMUM (Keyboard LeftControl)
     0x29, 0xe7, //   USAGE_MAXIMUM (Keyboard Right GUI)
@@ -35,18 +37,21 @@ __code uint8_t KeyboardReportDescriptor[] = {
     0x19, 0x00, //   USAGE_MINIMUM (Reserved (no event indicated))
     0x29, 0xe7, //   USAGE_MAXIMUM (Keyboard Right GUI)
     0x81, 0x00, //   INPUT (Data,Ary,Abs)
-    0x05, 0x08, //   USAGE_PAGE (LEDs)
-    0x19, 0x01, //   USAGE_MINIMUM (Num Lock)
-    0x29, 0x05, //   USAGE_MAXIMUM (Kana)
+    0xc0,       // END_COLLECTION
+
+    /* Report ID 2: Consumer Control (multimedia keys) */
+    0x05, 0x0C, // USAGE_PAGE (Consumer)
+    0x09, 0x01, // USAGE (Consumer Control)
+    0xA1, 0x01, // COLLECTION (Application)
+    0x85, 0x02, //   REPORT_ID (2)
     0x15, 0x00, //   LOGICAL_MINIMUM (0)
-    0x25, 0x01, //   LOGICAL_MAXIMUM (1)
-    0x95, 0x05, //   REPORT_COUNT (5)
-    0x75, 0x01, //   REPORT_SIZE (1)
-    0x91, 0x02, //   OUTPUT (Data,Var,Abs)
+    0x26, 0xFF, 0x03, //   LOGICAL_MAXIMUM (1023)
+    0x19, 0x00, //   USAGE_MINIMUM (0)
+    0x2A, 0xFF, 0x03, //   USAGE_MAXIMUM (1023)
+    0x75, 0x10, //   REPORT_SIZE (16)
     0x95, 0x01, //   REPORT_COUNT (1)
-    0x75, 0x03, //   REPORT_SIZE (3)
-    0x91, 0x03, //   OUTPUT (Cnst,Var,Abs)
-    0xc0        // END_COLLECTION
+    0x81, 0x00, //   INPUT (Data,Ary,Abs)
+    0xC0        // END_COLLECTION
 };
 
 /* --- Vendor Report Descriptor (config Feature Reports) ------------ */
@@ -94,6 +99,24 @@ __code uint8_t VendorReportDescriptor[] = {
     /* Feature Report ID 5 — LED configuration (7 bytes) */
     0x85, 0x05,       //   REPORT_ID (5)
     0x09, 0x05,       //   USAGE (Vendor Usage 5)
+    0x15, 0x00,       //   LOGICAL_MINIMUM (0)
+    0x26, 0xFF, 0x00, //   LOGICAL_MAXIMUM (255)
+    0x75, 0x08,       //   REPORT_SIZE (8)
+    0x95, 0x07,       //   REPORT_COUNT (7)
+    0xB1, 0x02,       //   FEATURE (Data,Var,Abs)
+
+    /* Feature Report ID 6 — long-press key mapping (7 bytes) */
+    0x85, 0x06,       //   REPORT_ID (6)
+    0x09, 0x06,       //   USAGE (Vendor Usage 6)
+    0x15, 0x00,       //   LOGICAL_MINIMUM (0)
+    0x26, 0xFF, 0x00, //   LOGICAL_MAXIMUM (255)
+    0x75, 0x08,       //   REPORT_SIZE (8)
+    0x95, 0x07,       //   REPORT_COUNT (7)
+    0xB1, 0x02,       //   FEATURE (Data,Var,Abs)
+
+    /* Feature Report ID 7 — long-press encoder extended (7 bytes) */
+    0x85, 0x07,       //   REPORT_ID (7)
+    0x09, 0x07,       //   USAGE (Vendor Usage 7)
     0x15, 0x00,       //   LOGICAL_MINIMUM (0)
     0x26, 0xFF, 0x00, //   LOGICAL_MAXIMUM (255)
     0x75, 0x08,       //   REPORT_SIZE (8)
@@ -154,8 +177,8 @@ __code USB_Descriptor_Configuration_t ConfigurationDescriptor = {
         .AlternateSetting = 0x00,
         .TotalEndpoints = 1,
         .Class    = HID_CSCP_HIDClass,
-        .SubClass = HID_CSCP_BootSubclass,
-        .Protocol = HID_CSCP_KeyboardBootProtocol,
+        .SubClass = 0x00,           /* non-boot (Report IDs used) */
+        .Protocol = 0x00,           /* none */
         .InterfaceStrIndex = NO_DESCRIPTOR
     },
 

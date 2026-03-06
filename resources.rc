@@ -1,4 +1,6 @@
 // resources.rc — CH552G Keyboard Configurator
+1 ICON "icon.ico"
+
 #include <winver.h>
 
 VS_VERSION_INFO VERSIONINFO

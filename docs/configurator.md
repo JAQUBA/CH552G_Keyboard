@@ -97,16 +97,28 @@ hid.setFeatureReportSize(CONFIG_REPORT_SIZE);
 hid.findAndOpen();
 ```
 
-## Source
+## Source Files
 
-The entire app is in a single file: [src/app/main.cpp](../src/app/main.cpp)
+| File | Description |
+|---|---|
+| [src/app/main.cpp](../src/app/main.cpp) | Main module: UI layout, HID communication, live LED preview, auto-save |
+| [src/app/theme.h](../src/app/theme.h) | Dark color palette constants (Catppuccin Mocha-inspired) |
+| [src/app/keymap.h](../src/app/keymap.h) / [keymap.cpp](../src/app/keymap.cpp) | VK ↔ firmware key code conversions + modifier bitmask helpers |
+| [src/app/keycapture.h](../src/app/keycapture.h) / [keycapture.cpp](../src/app/keycapture.cpp) | Owner-draw key-capture button widget with subclass-based combo recording |
+| [src/shared/protocol.h](../src/shared/protocol.h) | Shared protocol definitions (used by both firmware and app) |
 
-Key functions:
+### Key Functions (main.cpp)
+
+- `readFromDevice()` — GET Feature Reports and populate UI
+- `writeToDevice()` — Send UI values as SET Feature Reports
+- `sendLedConfig()` — Live-send LED settings (Report 5 only)
+- `tryConnect()` — Auto-connect helper
+- `resetDefaults()` — Reset UI to factory defaults
+
+### Key Functions (keymap.cpp)
+
 - `vkToFwKey()` — Convert Windows Virtual Key to firmware key code
 - `fwKeyToName()` — Convert firmware key code to display name
 - `fwKeyToModBit()` — Convert modifier key code to bitmask bit
 - `getAsyncModBits()` — Read currently pressed modifiers
 - `comboToName()` — Full display name for a key combo (e.g. "LCtrl+Alt+F6")
-- `readFromDevice()` — GET Feature Reports and populate UI
-- `writeToDevice()` — Send UI values as SET Feature Reports
-- `sendLedConfig()` — Live-send LED settings (Report 5 only)

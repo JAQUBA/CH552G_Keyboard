@@ -37,6 +37,52 @@
 #define ENC_PULSE_MS   30
 
 /* ============================================================ */
+/*  Media key to USB Consumer usage mapping                      */
+/* ============================================================ */
+static uint16_t media_fw_to_usage(uint8_t fw_code) {
+    switch (fw_code) {
+        case KC_MEDIA_PLAY_PAUSE: return 0x00CD;
+        case KC_MEDIA_STOP:       return 0x00B7;
+        case KC_MEDIA_PREV_TRACK: return 0x00B6;
+        case KC_MEDIA_NEXT_TRACK: return 0x00B5;
+        case KC_MEDIA_VOL_UP:     return 0x00E9;
+        case KC_MEDIA_VOL_DOWN:   return 0x00EA;
+        case KC_MEDIA_MUTE:       return 0x00E2;
+        default: return 0;
+    }
+}
+
+/* ============================================================ */
+/*  Key action helpers (keyboard or consumer control)             */
+/* ============================================================ */
+static void key_action_press(uint8_t mod, uint8_t key) {
+    if (IS_MEDIA_KEY(key)) {
+        Consumer_press(media_fw_to_usage(key));
+    } else {
+        press_mod_bits(mod);
+        Keyboard_press(key);
+    }
+}
+
+static void key_action_release(uint8_t mod, uint8_t key) {
+    if (IS_MEDIA_KEY(key)) {
+        Consumer_release();
+    } else {
+        Keyboard_release(key);
+        release_mod_bits(mod);
+    }
+}
+
+/* ============================================================ */
+/*  Button state for long-press detection                        */
+/* ============================================================ */
+typedef struct {
+    uint8_t  prev;        /* previous debounced state */
+    uint8_t  long_fired;  /* long press already fired this hold */
+    uint32_t press_time;  /* millis() when button was pressed */
+} ButtonState;
+
+/* ============================================================ */
 /*  Runtime state                                                */
 /* ============================================================ */
 __xdata uint8_t led_data[NUM_LEDS * 3];
@@ -45,12 +91,13 @@ static uint8_t breathe_val   = 0;
 static  int8_t breathe_dir   = 1;
 static uint8_t led_frame_cnt = 0;   /* throttle LED animation speed */
 
-static uint8_t key1_prev    = 0;
-static uint8_t key2_prev    = 0;
-static uint8_t key3_prev    = 0;
-static uint8_t enc_btn_prev = 0;
 static uint8_t enc_a_prev   = 1;
 static uint8_t led_toggle_state = 0; /* per-LED on/off state for toggle mode */
+
+static ButtonState bs_key1    = {0, 0, 0};
+static ButtonState bs_key2    = {0, 0, 0};
+static ButtonState bs_key3    = {0, 0, 0};
+static ButtonState bs_enc_btn = {0, 0, 0};
 
 /* ============================================================ */
 /*  HSV → RGB                                                    */
@@ -99,23 +146,51 @@ static void release_mod_bits(uint8_t bits) {
 }
 
 /* ============================================================ */
-/*  Button helper                                                */
+/*  Button helper (with long-press support)                      */
 /* ============================================================ */
-static void handle_button(uint8_t pin, uint8_t mod, uint8_t key,
-                          uint8_t *prev, uint8_t led_idx) {
+static void handle_button_lp(uint8_t pin,
+                             uint8_t mod, uint8_t key,
+                             uint8_t long_mod, uint8_t long_key,
+                             ButtonState *bs, uint8_t led_idx) {
     uint8_t pressed = !digitalRead(pin);
-    if (pressed != *prev) {
-        *prev = pressed;
-        if (pressed) {
-            press_mod_bits(mod);
-            Keyboard_press(key);
-            /* If this key has LED toggle enabled, flip the LED state */
-            if (g_config.led_toggle & (1 << led_idx)) {
-                led_toggle_state ^= (1 << led_idx);
+
+    if (pressed && !bs->prev) {
+        /* Just pressed */
+        bs->prev = 1;
+        bs->long_fired = 0;
+        bs->press_time = millis();
+
+        /* Toggle LED state if enabled */
+        if (led_idx < NUM_LEDS && (g_config.led_toggle & (1 << led_idx))) {
+            led_toggle_state ^= (1 << led_idx);
+        }
+
+        if (long_key == 0) {
+            /* No long press configured — immediate press (hold behavior) */
+            key_action_press(mod, key);
+        }
+    } else if (pressed && bs->prev) {
+        /* Still held */
+        if (long_key != 0 && !bs->long_fired) {
+            if ((millis() - bs->press_time) >= LONG_PRESS_MS) {
+                bs->long_fired = 1;
+                key_action_press(long_mod, long_key);
             }
+        }
+    } else if (!pressed && bs->prev) {
+        /* Just released */
+        bs->prev = 0;
+        if (long_key == 0) {
+            /* No long press — release held key */
+            key_action_release(mod, key);
+        } else if (bs->long_fired) {
+            /* Long press was fired — release it */
+            key_action_release(long_mod, long_key);
         } else {
-            Keyboard_release(key);
-            release_mod_bits(mod);
+            /* Short tap — press and immediately release */
+            key_action_press(mod, key);
+            delay(10);
+            key_action_release(mod, key);
         }
     }
 }
@@ -124,11 +199,9 @@ static void handle_button(uint8_t pin, uint8_t mod, uint8_t key,
 /*  Encoder pulse helper                                         */
 /* ============================================================ */
 static void encoder_pulse(uint8_t mod, uint8_t key) {
-    press_mod_bits(mod);
-    Keyboard_press(key);
+    key_action_press(mod, key);
     delay(ENC_PULSE_MS);
-    Keyboard_release(key);
-    release_mod_bits(mod);
+    key_action_release(mod, key);
 }
 
 /* ============================================================ */
@@ -188,11 +261,23 @@ void loop() {
         enterBootloader();  /* never returns */
     }
 
-    /* --- Buttons (use runtime config) --- */
-    handle_button(KEY1_PIN,    g_config.key1_mod,    g_config.key1_code,    &key1_prev,    0);
-    handle_button(KEY2_PIN,    g_config.key2_mod,    g_config.key2_code,    &key2_prev,    1);
-    handle_button(KEY3_PIN,    g_config.key3_mod,    g_config.key3_code,    &key3_prev,    2);
-    handle_button(ENC_BTN_PIN, g_config.enc_btn_mod, g_config.enc_btn_code, &enc_btn_prev, 3);
+    /* --- Buttons (use runtime config, with long-press support) --- */
+    handle_button_lp(KEY1_PIN,
+                     g_config.key1_mod, g_config.key1_code,
+                     g_config.key1_long_mod, g_config.key1_long_code,
+                     &bs_key1, 0);
+    handle_button_lp(KEY2_PIN,
+                     g_config.key2_mod, g_config.key2_code,
+                     g_config.key2_long_mod, g_config.key2_long_code,
+                     &bs_key2, 1);
+    handle_button_lp(KEY3_PIN,
+                     g_config.key3_mod, g_config.key3_code,
+                     g_config.key3_long_mod, g_config.key3_long_code,
+                     &bs_key3, 2);
+    handle_button_lp(ENC_BTN_PIN,
+                     g_config.enc_btn_mod, g_config.enc_btn_code,
+                     g_config.enc_btn_long_mod, g_config.enc_btn_long_code,
+                     &bs_enc_btn, 3);
 
     /* --- Rotary encoder --- */
     {

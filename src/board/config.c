@@ -38,6 +38,14 @@ void config_load(void) {
     g_config.led_g          = eeprom_read_byte(EEPROM_ADDR_LED_G);
     g_config.led_b          = eeprom_read_byte(EEPROM_ADDR_LED_B);
     g_config.led_toggle     = eeprom_read_byte(EEPROM_ADDR_LED_TOGGLE);
+    g_config.key1_long_mod    = eeprom_read_byte(EEPROM_ADDR_KEY1_LONG_MOD);
+    g_config.key1_long_code   = eeprom_read_byte(EEPROM_ADDR_KEY1_LONG);
+    g_config.key2_long_mod    = eeprom_read_byte(EEPROM_ADDR_KEY2_LONG_MOD);
+    g_config.key2_long_code   = eeprom_read_byte(EEPROM_ADDR_KEY2_LONG);
+    g_config.key3_long_mod    = eeprom_read_byte(EEPROM_ADDR_KEY3_LONG_MOD);
+    g_config.key3_long_code   = eeprom_read_byte(EEPROM_ADDR_KEY3_LONG);
+    g_config.enc_btn_long_mod = eeprom_read_byte(EEPROM_ADDR_ENC_BTN_LONG_MOD);
+    g_config.enc_btn_long_code= eeprom_read_byte(EEPROM_ADDR_ENC_BTN_LONG);
 
     /* Validate led_mode — default to rainbow for unknown values */
     if (g_config.led_mode > LED_MODE_BREATHE)
@@ -64,6 +72,14 @@ void config_save(void) {
     eeprom_write_byte(EEPROM_ADDR_LED_G,      g_config.led_g);
     eeprom_write_byte(EEPROM_ADDR_LED_B,      g_config.led_b);
     eeprom_write_byte(EEPROM_ADDR_LED_TOGGLE, g_config.led_toggle);
+    eeprom_write_byte(EEPROM_ADDR_KEY1_LONG_MOD,    g_config.key1_long_mod);
+    eeprom_write_byte(EEPROM_ADDR_KEY1_LONG,         g_config.key1_long_code);
+    eeprom_write_byte(EEPROM_ADDR_KEY2_LONG_MOD,    g_config.key2_long_mod);
+    eeprom_write_byte(EEPROM_ADDR_KEY2_LONG,         g_config.key2_long_code);
+    eeprom_write_byte(EEPROM_ADDR_KEY3_LONG_MOD,    g_config.key3_long_mod);
+    eeprom_write_byte(EEPROM_ADDR_KEY3_LONG,         g_config.key3_long_code);
+    eeprom_write_byte(EEPROM_ADDR_ENC_BTN_LONG_MOD, g_config.enc_btn_long_mod);
+    eeprom_write_byte(EEPROM_ADDR_ENC_BTN_LONG,     g_config.enc_btn_long_code);
     eeprom_write_byte(EEPROM_ADDR_MAGIC,      EEPROM_MAGIC);
 }
 
@@ -87,6 +103,14 @@ void config_reset(void) {
     g_config.led_g          = DEFAULT_LED_G;
     g_config.led_b          = DEFAULT_LED_B;
     g_config.led_toggle     = DEFAULT_LED_TOGGLE;
+    g_config.key1_long_mod    = DEFAULT_KEY1_LONG_MOD;
+    g_config.key1_long_code   = DEFAULT_KEY1_LONG;
+    g_config.key2_long_mod    = DEFAULT_KEY2_LONG_MOD;
+    g_config.key2_long_code   = DEFAULT_KEY2_LONG;
+    g_config.key3_long_mod    = DEFAULT_KEY3_LONG_MOD;
+    g_config.key3_long_code   = DEFAULT_KEY3_LONG;
+    g_config.enc_btn_long_mod = DEFAULT_ENC_BTN_LONG_MOD;
+    g_config.enc_btn_long_code= DEFAULT_ENC_BTN_LONG;
     config_save();
 }
 
@@ -151,4 +175,40 @@ void config_unpack_report5(const uint8_t *buf) {
     /* Validate led_mode */
     if (g_config.led_mode > LED_MODE_BREATHE)
         g_config.led_mode = LED_MODE_RAINBOW;
+}
+
+/* ---- Feature Report 6 pack/unpack (long-press key mapping) ---- */
+void config_pack_report6(uint8_t *buf) {
+    buf[0] = g_config.key1_long_mod;
+    buf[1] = g_config.key1_long_code;
+    buf[2] = g_config.key2_long_mod;
+    buf[3] = g_config.key2_long_code;
+    buf[4] = g_config.key3_long_mod;
+    buf[5] = g_config.key3_long_code;
+    buf[6] = g_config.enc_btn_long_mod;
+}
+
+void config_unpack_report6(const uint8_t *buf) {
+    g_config.key1_long_mod    = buf[0];
+    g_config.key1_long_code   = buf[1];
+    g_config.key2_long_mod    = buf[2];
+    g_config.key2_long_code   = buf[3];
+    g_config.key3_long_mod    = buf[4];
+    g_config.key3_long_code   = buf[5];
+    g_config.enc_btn_long_mod = buf[6];
+}
+
+/* ---- Feature Report 7 pack/unpack (long-press encoder) ---- */
+void config_pack_report7(uint8_t *buf) {
+    buf[0] = g_config.enc_btn_long_code;
+    buf[1] = 0;
+    buf[2] = 0;
+    buf[3] = 0;
+    buf[4] = 0;
+    buf[5] = 0;
+    buf[6] = 0;
+}
+
+void config_unpack_report7(const uint8_t *buf) {
+    g_config.enc_btn_long_code = buf[0];
 }

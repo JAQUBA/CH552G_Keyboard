@@ -26,6 +26,8 @@
 #define REPORT_ID_ENCODER    3   /* encoder mapping     (7 bytes)     */
 #define REPORT_ID_COMMAND    4   /* command report      (1 byte)      */
 #define REPORT_ID_LED        5   /* LED configuration   (7 bytes)     */
+#define REPORT_ID_LONG_KEYS  6   /* long-press key mapping (7 bytes)  */
+#define REPORT_ID_LONG_ENC   7   /* long-press encoder     (7 bytes)  */
 
 #define CONFIG_REPORT_SIZE   7   /* data bytes per Feature report     */
 #define CMD_REPORT_SIZE      1   /* data bytes for command report     */
@@ -60,6 +62,19 @@
  *    [4]  LED static Blue  (0-255)
  *    [5]  LED toggle mask  (bit0=key1, bit1=key2, bit2=key3)
  *    [6]  (reserved, 0)
+ *
+ *  Feature Report ID 6 — long-press key mapping (7 data bytes):
+ *    [0]  Key1 long-press modifier bitmask
+ *    [1]  Key1 long-press code
+ *    [2]  Key2 long-press modifier bitmask
+ *    [3]  Key2 long-press code
+ *    [4]  Key3 long-press modifier bitmask
+ *    [5]  Key3 long-press code
+ *    [6]  Encoder button long-press modifier bitmask
+ *
+ *  Feature Report ID 7 — long-press encoder extended (7 data bytes):
+ *    [0]  Encoder button long-press code
+ *    [1-6]  (reserved, 0)
  */
 
 /* ------------------------------------------------------------------ */
@@ -77,7 +92,7 @@
 /* ------------------------------------------------------------------ */
 /*  EEPROM / DataFlash layout  (128 bytes available on CH552)          */
 /* ------------------------------------------------------------------ */
-#define EEPROM_MAGIC          0xA6  /* bumped from 0xA5 — new layout */
+#define EEPROM_MAGIC          0xA7  /* bumped from 0xA6 — long press + multimedia */
 
 #define EEPROM_ADDR_MAGIC       0
 #define EEPROM_ADDR_KEY1_MOD    1
@@ -98,7 +113,15 @@
 #define EEPROM_ADDR_LED_G      16
 #define EEPROM_ADDR_LED_B      17
 #define EEPROM_ADDR_LED_TOGGLE 18
-#define EEPROM_CONFIG_SIZE     19
+#define EEPROM_ADDR_KEY1_LONG_MOD  19
+#define EEPROM_ADDR_KEY1_LONG      20
+#define EEPROM_ADDR_KEY2_LONG_MOD  21
+#define EEPROM_ADDR_KEY2_LONG      22
+#define EEPROM_ADDR_KEY3_LONG_MOD  23
+#define EEPROM_ADDR_KEY3_LONG      24
+#define EEPROM_ADDR_ENC_BTN_LONG_MOD 25
+#define EEPROM_ADDR_ENC_BTN_LONG   26
+#define EEPROM_CONFIG_SIZE         27
 
 /* ------------------------------------------------------------------ */
 /*  LED modes                                                          */
@@ -128,6 +151,19 @@
 #define DEFAULT_LED_G     255
 #define DEFAULT_LED_B     255
 #define DEFAULT_LED_TOGGLE 0x00  /* no toggle by default */
+
+/* Long-press defaults (0 = disabled) */
+#define DEFAULT_KEY1_LONG_MOD    0x00
+#define DEFAULT_KEY1_LONG        0x00
+#define DEFAULT_KEY2_LONG_MOD    0x00
+#define DEFAULT_KEY2_LONG        0x00
+#define DEFAULT_KEY3_LONG_MOD    0x00
+#define DEFAULT_KEY3_LONG        0x00
+#define DEFAULT_ENC_BTN_LONG_MOD 0x00
+#define DEFAULT_ENC_BTN_LONG     0x00
+
+/* Long-press threshold (ms) */
+#define LONG_PRESS_MS  500
 
 /* ------------------------------------------------------------------ */
 /*  Key code constants  (mirrors USBHIDKeyboard.h)                     */
@@ -170,5 +206,22 @@
 #define KC_F10         0xCB
 #define KC_F11         0xCC
 #define KC_F12         0xCD
+
+/* ------------------------------------------------------------------ */
+/*  Multimedia (Consumer Control) key codes                            */
+/*  Range 0x01–0x07 — unused by standard keyboard code space.          */
+/*  The firmware sends these via the Consumer Control HID report.      */
+/* ------------------------------------------------------------------ */
+#define KC_MEDIA_PLAY_PAUSE  0x01
+#define KC_MEDIA_STOP        0x02
+#define KC_MEDIA_PREV_TRACK  0x03
+#define KC_MEDIA_NEXT_TRACK  0x04
+#define KC_MEDIA_VOL_UP      0x05
+#define KC_MEDIA_VOL_DOWN    0x06
+#define KC_MEDIA_MUTE        0x07
+
+#define KC_MEDIA_FIRST  KC_MEDIA_PLAY_PAUSE
+#define KC_MEDIA_LAST   KC_MEDIA_MUTE
+#define IS_MEDIA_KEY(k) ((k) >= KC_MEDIA_FIRST && (k) <= KC_MEDIA_LAST)
 
 #endif /* PROTOCOL_H */

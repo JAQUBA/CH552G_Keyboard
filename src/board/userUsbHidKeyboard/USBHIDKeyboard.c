@@ -22,7 +22,11 @@ extern __xdata uint8_t keyboardLedStatus;
 
 volatile __xdata uint8_t UpPoint1_Busy = 0;
 
-__xdata uint8_t HIDKey[8] = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
+/* Report ID 1: keyboard (1 + 8 = 9 bytes) */
+__xdata uint8_t HIDKey[9] = {0x01, 0, 0, 0, 0, 0, 0, 0, 0};
+
+/* Report ID 2: consumer control (1 + 2 = 3 bytes) */
+__xdata uint8_t ConsumerKey[3] = {0x02, 0, 0};
 
 #define SHIFT 0x80
 __code uint8_t _asciimap[128] = {
@@ -209,12 +213,37 @@ uint8_t USB_EP1_send() {
   return 1;
 }
 
+static uint8_t USB_EP1_send_consumer() {
+  if (UsbConfig == 0) {
+    return 0;
+  }
+
+  __data uint16_t waitWriteCount = 0;
+
+  while (UpPoint1_Busy) {
+    waitWriteCount++;
+    delayMicroseconds(5);
+    if (waitWriteCount >= 50000)
+      return 0;
+  }
+
+  for (__data uint8_t i = 0; i < sizeof(ConsumerKey); i++) {
+    Ep1Buffer[i] = ConsumerKey[i];
+  }
+
+  UEP1_T_LEN = sizeof(ConsumerKey);
+  UpPoint1_Busy = 1;
+  UEP1_CTRL = UEP1_CTRL & ~MASK_UEP_T_RES | UEP_T_RES_ACK;
+
+  return 1;
+}
+
 uint8_t Keyboard_press(__data uint8_t k) {
   __data uint8_t i;
   if (k >= 136) {
     k = k - 136;
   } else if (k >= 128) {
-    HIDKey[0] |= (1 << (k - 128));
+    HIDKey[1] |= (1 << (k - 128));
     k = 0;
   } else {
     k = _asciimap[k];
@@ -222,20 +251,20 @@ uint8_t Keyboard_press(__data uint8_t k) {
       return 0;
     }
     if (k & 0x80) {
-      HIDKey[0] |= 0x02;
+      HIDKey[1] |= 0x02;
       k &= 0x7F;
     }
   }
 
-  if (HIDKey[2] != k && HIDKey[3] != k && HIDKey[4] != k && HIDKey[5] != k &&
-      HIDKey[6] != k && HIDKey[7] != k) {
-    for (i = 2; i < 8; i++) {
+  if (HIDKey[3] != k && HIDKey[4] != k && HIDKey[5] != k && HIDKey[6] != k &&
+      HIDKey[7] != k && HIDKey[8] != k) {
+    for (i = 3; i < 9; i++) {
       if (HIDKey[i] == 0x00) {
         HIDKey[i] = k;
         break;
       }
     }
-    if (i == 8) {
+    if (i == 9) {
       return 0;
     }
   }
@@ -248,7 +277,7 @@ uint8_t Keyboard_release(__data uint8_t k) {
   if (k >= 136) {
     k = k - 136;
   } else if (k >= 128) {
-    HIDKey[0] &= ~(1 << (k - 128));
+    HIDKey[1] &= ~(1 << (k - 128));
     k = 0;
   } else {
     k = _asciimap[k];
@@ -256,12 +285,12 @@ uint8_t Keyboard_release(__data uint8_t k) {
       return 0;
     }
     if (k & 0x80) {
-      HIDKey[0] &= ~(0x02);
+      HIDKey[1] &= ~(0x02);
       k &= 0x7F;
     }
   }
 
-  for (i = 2; i < 8; i++) {
+  for (i = 3; i < 9; i++) {
     if (0 != k && HIDKey[i] == k) {
       HIDKey[i] = 0x00;
     }
@@ -272,10 +301,23 @@ uint8_t Keyboard_release(__data uint8_t k) {
 }
 
 void Keyboard_releaseAll(void) {
-  for (__data uint8_t i = 0; i < sizeof(HIDKey); i++) {
+  __data uint8_t i;
+  for (i = 1; i < sizeof(HIDKey); i++) {
     HIDKey[i] = 0;
   }
   USB_EP1_send();
+}
+
+void Consumer_press(uint16_t usage) {
+  ConsumerKey[1] = (uint8_t)(usage & 0xFF);
+  ConsumerKey[2] = (uint8_t)(usage >> 8);
+  USB_EP1_send_consumer();
+}
+
+void Consumer_release(void) {
+  ConsumerKey[1] = 0;
+  ConsumerKey[2] = 0;
+  USB_EP1_send_consumer();
 }
 
 uint8_t Keyboard_write(__data uint8_t c) {

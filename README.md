@@ -80,7 +80,10 @@ CH552G_Keyboard/
     │   ├── config.c/h        EEPROM configuration management
     │   └── userUsbHidKeyboard/  Custom composite USB HID stack
     ├── app/
-    │   └── main.cpp          Windows configurator (C++17, JQB_WindowsLib)
+    │   ├── main.cpp          Windows configurator (C++17, JQB_WindowsLib)
+    │   ├── theme.h           Dark color palette (Catppuccin Mocha-inspired)
+    │   ├── keymap.h/cpp      VK ↔ firmware key code conversions
+    │   └── keycapture.h/cpp  Owner-draw key-capture button widget
     └── shared/
         └── protocol.h       Shared protocol definitions (firmware + app)
 ```
@@ -189,24 +192,3 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 - [WCH](https://www.wch-ic.com/) for the CH552G microcontroller
 - [ch55xduino](https://github.com/DeqingSun/ch55xduino) Arduino core for CH55x
 - [pid.codes](https://pid.codes/) for the open-source USB VID `0x1209`
-
-Przyciski: **Odczytaj** / **Zapisz** / **Domyślne** / **Bootloader**
-
-Komunikacja z klawiaturą odbywa się przez HID Feature Reports (VID `0x1209`, PID `0xC55D`, Usage Page `0xFF00`).
-
-## Protokół USB
-
-Konfiguracja przez 3 Feature Reports na EP0:
-
-| Report ID | Funkcja |
-|---|---|
-| 2 | Mapowanie klawiszy (modifier bitmask + key code) |
-| 3 | Mapowanie enkodera (modifier bitmask + key code) |
-| 4 | Komenda (0x42 = bootloader) |
-| 5 | Konfiguracja LED (tryb, jasność, kolor, toggle) |
-
-Każdy klawisz i funkcja enkodera obsługuje **kombinacje z modyfikatorami** (Ctrl, Shift, Alt, Win — lewy/prawy).
-
-## Licencja
-
-MIT
