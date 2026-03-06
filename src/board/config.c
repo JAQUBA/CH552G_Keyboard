@@ -52,35 +52,41 @@ void config_load(void) {
         g_config.led_mode = LED_MODE_RAINBOW;
 }
 
-/* ---- Save to DataFlash ---- */
+/* Write a single byte only if it differs from the stored value. */
+static void eeprom_update_byte(__data uint8_t addr, __xdata uint8_t val) {
+    if (eeprom_read_byte(addr) != val)
+        eeprom_write_byte(addr, val);
+}
+
+/* ---- Save to DataFlash (skip unchanged bytes) ---- */
 void config_save(void) {
-    eeprom_write_byte(EEPROM_ADDR_KEY1_MOD,   g_config.key1_mod);
-    eeprom_write_byte(EEPROM_ADDR_KEY1,       g_config.key1_code);
-    eeprom_write_byte(EEPROM_ADDR_KEY2_MOD,   g_config.key2_mod);
-    eeprom_write_byte(EEPROM_ADDR_KEY2,       g_config.key2_code);
-    eeprom_write_byte(EEPROM_ADDR_KEY3_MOD,   g_config.key3_mod);
-    eeprom_write_byte(EEPROM_ADDR_KEY3,       g_config.key3_code);
-    eeprom_write_byte(EEPROM_ADDR_ENC_BTN_MOD, g_config.enc_btn_mod);
-    eeprom_write_byte(EEPROM_ADDR_ENC_BTN,    g_config.enc_btn_code);
-    eeprom_write_byte(EEPROM_ADDR_CW_MOD,     g_config.enc_cw_mod);
-    eeprom_write_byte(EEPROM_ADDR_CW_KEY,     g_config.enc_cw_key);
-    eeprom_write_byte(EEPROM_ADDR_CCW_MOD,    g_config.enc_ccw_mod);
-    eeprom_write_byte(EEPROM_ADDR_CCW_KEY,    g_config.enc_ccw_key);
-    eeprom_write_byte(EEPROM_ADDR_LED_BRT,    g_config.led_brightness);
-    eeprom_write_byte(EEPROM_ADDR_LED_MODE,   g_config.led_mode);
-    eeprom_write_byte(EEPROM_ADDR_LED_R,      g_config.led_r);
-    eeprom_write_byte(EEPROM_ADDR_LED_G,      g_config.led_g);
-    eeprom_write_byte(EEPROM_ADDR_LED_B,      g_config.led_b);
-    eeprom_write_byte(EEPROM_ADDR_LED_TOGGLE, g_config.led_toggle);
-    eeprom_write_byte(EEPROM_ADDR_KEY1_LONG_MOD,    g_config.key1_long_mod);
-    eeprom_write_byte(EEPROM_ADDR_KEY1_LONG,         g_config.key1_long_code);
-    eeprom_write_byte(EEPROM_ADDR_KEY2_LONG_MOD,    g_config.key2_long_mod);
-    eeprom_write_byte(EEPROM_ADDR_KEY2_LONG,         g_config.key2_long_code);
-    eeprom_write_byte(EEPROM_ADDR_KEY3_LONG_MOD,    g_config.key3_long_mod);
-    eeprom_write_byte(EEPROM_ADDR_KEY3_LONG,         g_config.key3_long_code);
-    eeprom_write_byte(EEPROM_ADDR_ENC_BTN_LONG_MOD, g_config.enc_btn_long_mod);
-    eeprom_write_byte(EEPROM_ADDR_ENC_BTN_LONG,     g_config.enc_btn_long_code);
-    eeprom_write_byte(EEPROM_ADDR_MAGIC,      EEPROM_MAGIC);
+    eeprom_update_byte(EEPROM_ADDR_KEY1_MOD,   g_config.key1_mod);
+    eeprom_update_byte(EEPROM_ADDR_KEY1,       g_config.key1_code);
+    eeprom_update_byte(EEPROM_ADDR_KEY2_MOD,   g_config.key2_mod);
+    eeprom_update_byte(EEPROM_ADDR_KEY2,       g_config.key2_code);
+    eeprom_update_byte(EEPROM_ADDR_KEY3_MOD,   g_config.key3_mod);
+    eeprom_update_byte(EEPROM_ADDR_KEY3,       g_config.key3_code);
+    eeprom_update_byte(EEPROM_ADDR_ENC_BTN_MOD, g_config.enc_btn_mod);
+    eeprom_update_byte(EEPROM_ADDR_ENC_BTN,    g_config.enc_btn_code);
+    eeprom_update_byte(EEPROM_ADDR_CW_MOD,     g_config.enc_cw_mod);
+    eeprom_update_byte(EEPROM_ADDR_CW_KEY,     g_config.enc_cw_key);
+    eeprom_update_byte(EEPROM_ADDR_CCW_MOD,    g_config.enc_ccw_mod);
+    eeprom_update_byte(EEPROM_ADDR_CCW_KEY,    g_config.enc_ccw_key);
+    eeprom_update_byte(EEPROM_ADDR_LED_BRT,    g_config.led_brightness);
+    eeprom_update_byte(EEPROM_ADDR_LED_MODE,   g_config.led_mode);
+    eeprom_update_byte(EEPROM_ADDR_LED_R,      g_config.led_r);
+    eeprom_update_byte(EEPROM_ADDR_LED_G,      g_config.led_g);
+    eeprom_update_byte(EEPROM_ADDR_LED_B,      g_config.led_b);
+    eeprom_update_byte(EEPROM_ADDR_LED_TOGGLE, g_config.led_toggle);
+    eeprom_update_byte(EEPROM_ADDR_KEY1_LONG_MOD,    g_config.key1_long_mod);
+    eeprom_update_byte(EEPROM_ADDR_KEY1_LONG,         g_config.key1_long_code);
+    eeprom_update_byte(EEPROM_ADDR_KEY2_LONG_MOD,    g_config.key2_long_mod);
+    eeprom_update_byte(EEPROM_ADDR_KEY2_LONG,         g_config.key2_long_code);
+    eeprom_update_byte(EEPROM_ADDR_KEY3_LONG_MOD,    g_config.key3_long_mod);
+    eeprom_update_byte(EEPROM_ADDR_KEY3_LONG,         g_config.key3_long_code);
+    eeprom_update_byte(EEPROM_ADDR_ENC_BTN_LONG_MOD, g_config.enc_btn_long_mod);
+    eeprom_update_byte(EEPROM_ADDR_ENC_BTN_LONG,     g_config.enc_btn_long_code);
+    eeprom_update_byte(EEPROM_ADDR_MAGIC,      EEPROM_MAGIC);
 }
 
 /* ---- Reset to factory defaults ---- */

@@ -307,6 +307,14 @@ static void writeToDevice() {
         return;
     }
 
+    /* Persist to EEPROM with a single save command */
+    uint8_t cmd = CMD_SAVE;
+    if (!hid.setFeatureReport(REPORT_ID_COMMAND, &cmd, CMD_REPORT_SIZE)) {
+        lblStatus->setText(L"Save error!");
+        lblStatus->setTextColor(CLR_RED);
+        return;
+    }
+
     saveLedSnapshot();
     lblStatus->setText(L"Saved to EEPROM");
     lblStatus->setTextColor(CLR_GREEN);

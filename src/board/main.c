@@ -55,6 +55,9 @@ static uint16_t media_fw_to_usage(uint8_t fw_code) {
 /* ============================================================ */
 /*  Key action helpers (keyboard or consumer control)             */
 /* ============================================================ */
+static void press_mod_bits(uint8_t bits);
+static void release_mod_bits(uint8_t bits);
+
 static void key_action_press(uint8_t mod, uint8_t key) {
     if (IS_MEDIA_KEY(key)) {
         Consumer_press(media_fw_to_usage(key));

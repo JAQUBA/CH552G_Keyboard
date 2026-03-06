@@ -34,6 +34,7 @@
 
 /* Command codes (Feature Report ID 4, byte 0) */
 #define CMD_BOOTLOADER       0x42  /* enter USB bootloader              */
+#define CMD_SAVE             0x43  /* persist g_config to EEPROM        */
 
 /*
  *  Feature Report ID 2 — key mapping (7 data bytes):

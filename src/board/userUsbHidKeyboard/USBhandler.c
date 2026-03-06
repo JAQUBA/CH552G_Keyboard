@@ -373,22 +373,19 @@ void USB_EP0_OUT() {
        * Actual report data starts at Ep0Buffer[1]. */
       if (setReportId == REPORT_ID_KEYS) {
         config_unpack_report2(Ep0Buffer + 1);
-        config_save();
       } else if (setReportId == REPORT_ID_ENCODER) {
         config_unpack_report3(Ep0Buffer + 1);
-        config_save();
       } else if (setReportId == REPORT_ID_LED) {
         config_unpack_report5(Ep0Buffer + 1);
-        config_save();
       } else if (setReportId == REPORT_ID_LONG_KEYS) {
         config_unpack_report6(Ep0Buffer + 1);
-        config_save();
       } else if (setReportId == REPORT_ID_LONG_ENC) {
         config_unpack_report7(Ep0Buffer + 1);
-        config_save();
       } else if (setReportId == REPORT_ID_COMMAND) {
         if (Ep0Buffer[1] == CMD_BOOTLOADER) {
           bootloader_request = 1;  /* defer to main loop so USB STATUS stage completes */
+        } else if (Ep0Buffer[1] == CMD_SAVE) {
+          config_save();
         }
       }
     } else {
