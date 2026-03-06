@@ -290,9 +290,9 @@ void loop() {
             if (enc_a == 0) {
                 uint8_t enc_b = digitalRead(ENC_B_PIN);
                 if (enc_b) {
-                    encoder_pulse(g_config.enc_cw_mod, g_config.enc_cw_key);
-                } else {
                     encoder_pulse(g_config.enc_ccw_mod, g_config.enc_ccw_key);
+                } else {
+                    encoder_pulse(g_config.enc_cw_mod, g_config.enc_cw_key);
                 }
             }
         }
