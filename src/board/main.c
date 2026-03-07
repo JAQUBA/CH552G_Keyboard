@@ -94,6 +94,10 @@ static uint8_t breathe_val   = 0;
 static  int8_t breathe_dir   = 1;
 static uint8_t led_frame_cnt = 0;   /* throttle LED animation speed */
 
+/* Auto-save: timestamp when config was changed (0 = no pending save) */
+static __xdata uint32_t config_dirty_since = 0;
+#define AUTO_SAVE_DELAY_MS 500
+
 static uint8_t enc_a_prev   = 1;
 static uint8_t led_toggle_state = 0; /* per-LED on/off state for toggle mode */
 
@@ -232,6 +236,8 @@ void enterBootloader(void) {
 /*  Setup                                                        */
 /* ============================================================ */
 void setup() {
+    pinMode(NEO_PIN, OUTPUT);
+
     /* Load key/encoder/LED config from DataFlash (EEPROM) */
     config_load();
 
@@ -248,9 +254,6 @@ void setup() {
     pinMode(ENC_BTN_PIN, INPUT_PULLUP);
 
     enc_a_prev = digitalRead(ENC_A_PIN);
-
-    /* NeoPixel */
-    pinMode(NEO_PIN, OUTPUT);
 }
 
 /* ============================================================ */
@@ -262,6 +265,25 @@ void loop() {
     /* --- Bootloader request (deferred from USB ISR) --- */
     if (bootloader_request) {
         enterBootloader();  /* never returns */
+    }
+
+    /* --- EEPROM save request (explicit CMD_SAVE from app) --- */
+    if (save_request) {
+        save_request = 0;
+        config_dirty_since = 0;  /* cancel auto-save, we're saving now */
+        config_save();
+    }
+
+    /* --- Auto-save: config changed via SET_REPORT for key/encoder --- */
+    if (config_changed) {
+        config_changed = 0;
+        config_dirty_since = millis();
+        if (config_dirty_since == 0) config_dirty_since = 1;  /* avoid 0 sentinel */
+    }
+    if (config_dirty_since != 0 &&
+        (millis() - config_dirty_since) >= AUTO_SAVE_DELAY_MS) {
+        config_dirty_since = 0;
+        config_save();
     }
 
     /* --- Buttons (use runtime config, with long-press support) --- */

@@ -67,6 +67,8 @@ void USBDeviceEndPointCfg(void);
 /* Flag set by USB ISR when bootloader command is received.
  * Checked in main loop() — deferred so EP0 STATUS stage completes first. */
 extern volatile __xdata uint8_t bootloader_request;
+extern volatile __xdata uint8_t save_request;
+extern volatile __xdata uint8_t config_changed;
 
 /* Jump to CH552 USB bootloader (call from main context, NOT from ISR) */
 void enterBootloader(void);

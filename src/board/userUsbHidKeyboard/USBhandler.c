@@ -30,6 +30,8 @@ __code uint8_t *__data pDescr;
 
 volatile uint8_t usbMsgFlags = 0;
 volatile __xdata uint8_t bootloader_request = 0;
+volatile __xdata uint8_t save_request = 0;
+volatile __xdata uint8_t config_changed = 0;  /* set when key/enc config received */
 
 __xdata uint8_t keyboardProtocol = 1;   /* 0=boot  1=report */
 __xdata uint8_t keyboardLedStatus = 0;
@@ -373,19 +375,24 @@ void USB_EP0_OUT() {
        * Actual report data starts at Ep0Buffer[1]. */
       if (setReportId == REPORT_ID_KEYS) {
         config_unpack_report2(Ep0Buffer + 1);
+        config_changed = 1;
       } else if (setReportId == REPORT_ID_ENCODER) {
         config_unpack_report3(Ep0Buffer + 1);
+        config_changed = 1;
       } else if (setReportId == REPORT_ID_LED) {
         config_unpack_report5(Ep0Buffer + 1);
+        /* Note: LED report does NOT set config_changed (live preview) */
       } else if (setReportId == REPORT_ID_LONG_KEYS) {
         config_unpack_report6(Ep0Buffer + 1);
+        config_changed = 1;
       } else if (setReportId == REPORT_ID_LONG_ENC) {
         config_unpack_report7(Ep0Buffer + 1);
+        config_changed = 1;
       } else if (setReportId == REPORT_ID_COMMAND) {
         if (Ep0Buffer[1] == CMD_BOOTLOADER) {
-          bootloader_request = 1;  /* defer to main loop so USB STATUS stage completes */
+          bootloader_request = 1;
         } else if (Ep0Buffer[1] == CMD_SAVE) {
-          config_save();
+          save_request = 1;
         }
       }
     } else {

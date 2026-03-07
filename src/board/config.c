@@ -7,6 +7,9 @@
 /* protocol.h is in src/shared, found via -I flag */
 #include "protocol.h"
 
+/* EA (global interrupt enable) — needed to protect SAFE_MOD sequence */
+#include <Arduino.h>
+
 /* ch55xduino core provides these (eeprom.c) */
 extern void eeprom_write_byte(__data uint8_t addr, __xdata uint8_t val);
 extern uint8_t eeprom_read_byte(__data uint8_t addr);
@@ -60,6 +63,13 @@ static void eeprom_update_byte(__data uint8_t addr, __xdata uint8_t val) {
 
 /* ---- Save to DataFlash (skip unchanged bytes) ---- */
 void config_save(void) {
+    /*
+     * Disable interrupts for the entire save.
+     * eeprom_write_byte uses SAFE_MOD = 0x55 / 0xAA which must execute
+     * within ~14 clock cycles.  A USB interrupt between the two writes
+     * breaks the sequence and the DataFlash write silently fails.
+     */
+    EA = 0;
     eeprom_update_byte(EEPROM_ADDR_KEY1_MOD,   g_config.key1_mod);
     eeprom_update_byte(EEPROM_ADDR_KEY1,       g_config.key1_code);
     eeprom_update_byte(EEPROM_ADDR_KEY2_MOD,   g_config.key2_mod);
@@ -87,6 +97,7 @@ void config_save(void) {
     eeprom_update_byte(EEPROM_ADDR_ENC_BTN_LONG_MOD, g_config.enc_btn_long_mod);
     eeprom_update_byte(EEPROM_ADDR_ENC_BTN_LONG,     g_config.enc_btn_long_code);
     eeprom_update_byte(EEPROM_ADDR_MAGIC,      EEPROM_MAGIC);
+    EA = 1;
 }
 
 /* ---- Reset to factory defaults ---- */
