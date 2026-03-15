@@ -497,9 +497,9 @@ void Keyboard_releaseAll(void);
 
 ```
 platformio.ini              # PlatformIO config (env:board + env:app)
-app.manifest                # Windows Common Controls v6 manifest
-resources.rc                # Windows app resources (icon + manifest)
 resources/
+  app.manifest              # Windows Common Controls v6 manifest
+  resources.rc              # Windows app resources (icon + manifest)
   icon.ico                  # Application icon
 src/
   board/
