@@ -67,7 +67,10 @@ The keyboard features:
 CH552G_Keyboard/
 ├── platformio.ini          PlatformIO config (env:board + env:app)
 ├── LICENSE                 MIT License
-├── resources.rc            Windows app resources (icon)
+├── app.manifest            Windows Common Controls v6 manifest
+├── resources.rc            Windows app resources (icon + manifest)
+├── resources/
+│   └── icon.ico            Application icon
 ├── docs/                   Documentation
 │   ├── hardware.md           Hardware reference & pinout
 │   ├── firmware.md           Firmware architecture & internals

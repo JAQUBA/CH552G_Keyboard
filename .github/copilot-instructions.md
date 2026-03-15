@@ -497,7 +497,10 @@ void Keyboard_releaseAll(void);
 
 ```
 platformio.ini              # PlatformIO config (env:board + env:app)
-resources.rc                # Windows app resources (icon)
+app.manifest                # Windows Common Controls v6 manifest
+resources.rc                # Windows app resources (icon + manifest)
+resources/
+  icon.ico                  # Application icon
 src/
   board/
     main.c                  # Firmware: composite HID + encoder + NeoPixel + bootloader
