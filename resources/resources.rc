@@ -20,6 +20,8 @@ BEGIN
             VALUE "ProductName",      "CH552G Keyboard Configurator"
             VALUE "FileDescription",  "CH552G Keyboard Configurator"
             VALUE "FileVersion",      "1.0.0"
+            VALUE "InternalName",     "CH552G_Keyboard"
+            VALUE "OriginalFilename", "CH552G_Keyboard.exe"
             VALUE "ProductVersion",   "1.0.0"
         END
     END
